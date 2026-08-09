@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     zip.file("database.json", JSON.stringify(generatedRecords, null, 2));
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(zipBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",

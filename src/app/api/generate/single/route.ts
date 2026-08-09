@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Retorna a imagem
-    return new NextResponse(finalImageBuffer, {
+    return new NextResponse(finalImageBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": "image/png",
