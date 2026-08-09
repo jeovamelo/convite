@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  convite-app:
+    build: .
+    container_name: convite-app
+    restart: always
+    ports:
+      - "3002:3002"
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    network_mode: "host"
