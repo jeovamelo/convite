@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertCircle, QrCode } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
 
-export default function ExibivelPage() {
+function ExibivelContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const code = params.code as string;
@@ -124,5 +124,13 @@ export default function ExibivelPage() {
       </div>
 
     </main>
+  );
+}
+
+export default function ExibivelPage() {
+  return (
+    <Suspense fallback={<div>Carregando Exibível...</div>}>
+      <ExibivelContent />
+    </Suspense>
   );
 }

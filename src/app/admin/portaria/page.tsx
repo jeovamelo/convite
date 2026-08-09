@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { QrCode, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 type InviteStatus = "IDLE" | "VALIDATING" | "VALID" | "USED" | "INVALID";
 
-export default function PortariaPage() {
+function PortariaContent() {
   const searchParams = useSearchParams();
   const initialCode = searchParams.get("code") || "";
   const initialToken = searchParams.get("token") || "";
@@ -126,5 +126,13 @@ export default function PortariaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PortariaPage() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <PortariaContent />
+    </Suspense>
   );
 }
