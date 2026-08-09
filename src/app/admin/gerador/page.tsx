@@ -330,7 +330,7 @@ export default function GeradorPage() {
             disabled={(!imageFile && !imagePreview) || isGenerating}
             className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-colors shadow-md disabled:opacity-50"
           >
-            <Eye size={20} /> TESTAR PRÉVIA
+            <Eye size={20} /> PRÉVIA
           </button>
           <button 
             onClick={handleBatchGenerate}
