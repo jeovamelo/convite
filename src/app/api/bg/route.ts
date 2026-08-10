@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
   try {
+    const { data } = await supabaseAdmin
+      .from("settings")
+      .select("base_image")
+      .eq("name", "Padrão (Inicial)")
+      .single();
+    if (data?.base_image?.startsWith("data:image/")) {
+      const match = data.base_image.match(/^data:(image\/[^;]+);base64,([\s\S]*)$/);
+      if (match) {
+        return new NextResponse(Buffer.from(match[2], "base64"), {
+          headers: { "Content-Type": match[1], "Cache-Control": "no-store" },
+        });
+      }
+    }
+
     const candidates = [
       path.join(process.cwd(), ".data", "background.png"),
       path.join(process.cwd(), ".data", "background.jpg"),

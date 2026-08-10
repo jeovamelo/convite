@@ -11,12 +11,14 @@ export default function SiteConfigPage() {
     place_name: "MAGIC BOOM",
     address_line1: "RUA CARLOS VASCONCELOS, 655",
     address_line2: "MEIRELES, FORTALEZA - CE",
+    title_text: "",
+    title_color: "#FFE800",
+    title_size: 28,
   });
 
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sampleToken, setSampleToken] = useState<string>("demo");
   
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -30,16 +32,6 @@ export default function SiteConfigPage() {
       .then((data) => {
         if (data.day) {
           setConfig(data);
-        }
-      })
-      .catch(console.error);
-
-    // Load sample ticket token for previewing
-    fetch("/api/tickets")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.tickets && data.tickets.length > 0) {
-          setSampleToken(data.tickets[0].token);
         }
       })
       .catch(console.error);
@@ -193,6 +185,58 @@ export default function SiteConfigPage() {
 
           <div className="pt-4 border-t">
             <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+              👑 Título do Convite (Opcional)
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase mb-1.5 block">Texto do Título</label>
+                <input 
+                  type="text" 
+                  className="w-full border rounded-xl p-3 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                  value={config.title_text || ""}
+                  onChange={(e) => setConfig({ ...config, title_text: e.target.value })}
+                  placeholder="Deixe em branco para usar apenas a imagem de fundo"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase mb-1.5 block">Cor do Texto</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="color" 
+                      className="w-10 h-10 border rounded-xl cursor-pointer bg-gray-50 p-1"
+                      value={config.title_color || "#FFE800"}
+                      onChange={(e) => setConfig({ ...config, title_color: e.target.value })}
+                    />
+                    <input 
+                      type="text" 
+                      className="flex-1 border rounded-xl p-2 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                      value={config.title_color || "#FFE800"}
+                      onChange={(e) => setConfig({ ...config, title_color: e.target.value })}
+                      placeholder="#FFE800"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase mb-1.5 block">Tamanho da Fonte (px)</label>
+                  <input 
+                    type="number" 
+                    className="w-full border rounded-xl p-3 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                    value={config.title_size || 28}
+                    onChange={(e) => setConfig({ ...config, title_size: parseInt(e.target.value, 10) || 28 })}
+                    min="12"
+                    max="80"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t">
+            <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-1.5">
               <ImageIcon size={16} /> Imagem de Fundo do Site (Background)
             </h3>
             
@@ -245,7 +289,7 @@ export default function SiteConfigPage() {
             </button>
 
             <Link 
-              href={sampleToken ? `/${sampleToken}` : "/"} 
+              href="/" 
               target="_blank" 
               className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-4 px-6 rounded-xl transition-all text-sm flex items-center gap-2 shadow-md"
             >
@@ -266,7 +310,21 @@ export default function SiteConfigPage() {
             {/* Overlay simulation of the UI */}
             <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-between p-4 pt-8">
               <div className="text-center w-full">
-                {/* Título de texto removido para usar o da imagem */}
+                {config.title_text && (
+                  <span 
+                    className="font-montserrat font-black italic tracking-wide uppercase leading-tight block select-none"
+                    style={{ 
+                      color: config.title_color || "#FFE800",
+                      fontSize: `${Math.min(22, (config.title_size || 28) * 0.7)}px`,
+                      textShadow: `
+                        -1px -1px 0 #000B29, 1px -1px 0 #000B29, -1px 1px 0 #000B29, 1px 1px 0 #000B29,
+                        0px 2px 0px #000B29, 0px 2px 5px rgba(0,0,0,0.5)
+                      `
+                    }}
+                  >
+                    {config.title_text}
+                  </span>
+                )}
               </div>
 
               <div className="w-full space-y-2 mb-4">

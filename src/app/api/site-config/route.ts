@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,19 @@ export async function GET() {
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, "utf-8");
-      return NextResponse.json(JSON.parse(raw));
+      const saved = JSON.parse(raw);
+      if (!saved.event_token) {
+        saved.event_token = crypto.randomBytes(12).toString("hex");
+        fs.writeFileSync(configPath, JSON.stringify(saved, null, 2));
+      }
+      return NextResponse.json({ configured: true, ...saved });
     }
   } catch (e) {}
 
   // Fallback defaults
   return NextResponse.json({
+    configured: false,
+    event_token: null,
     day: "19/08/2026",
     time: "19 HORAS",
     place_name: "MAGIC BOOM",
@@ -27,6 +35,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (!body.event_token) body.event_token = crypto.randomBytes(12).toString("hex");
     const dir = path.dirname(configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

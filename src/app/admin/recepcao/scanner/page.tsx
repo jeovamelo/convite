@@ -299,24 +299,24 @@ export default function ScannerPage() {
 
       {/* RESULTS MODAL (FULLSCREEN) */}
       {scanResult && (
-        <div className={`absolute inset-0 z-30 flex flex-col justify-between p-6
+        <div className={`absolute inset-0 z-30 flex flex-col justify-center items-center p-6 overflow-y-auto
           ${scanResult.status === 'SUCCESS' ? 'bg-green-600' : 
             scanResult.status === 'ALREADY_USED' ? 'bg-red-600' : 
             scanResult.status === 'INVALID' && scanResult.message === 'Validando...' ? 'bg-blue-600' : 'bg-red-600'}`}>
           
-          <div className="flex-1 flex flex-col items-center justify-center text-center mt-10">
+          <div className="w-full max-w-lg flex flex-col items-center text-center gap-6 my-auto pt-6">
             
             {scanResult.message === 'Validando...' && (
               <>
-                <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-white mb-6"></div>
+                <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-white mb-2"></div>
                 <h2 className="text-3xl font-black text-white italic">VALIDANDO...</h2>
               </>
             )}
 
             {scanResult.status === 'SUCCESS' && (
               <>
-                <CheckCircle size={80} className="text-white mb-6" />
-                <h2 className="text-4xl font-black text-white uppercase tracking-wider mb-8">Entrada Registrada</h2>
+                <CheckCircle size={80} className="text-white" />
+                <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">Entrada Registrada</h2>
                 
                 <div className="bg-black/20 w-full rounded-3xl p-6 backdrop-blur">
                   <p className="text-white/80 font-bold text-sm uppercase mb-1">Exibível</p>
@@ -353,8 +353,8 @@ export default function ScannerPage() {
 
             {scanResult.status === 'ALREADY_USED' && (
               <>
-                <AlertTriangle size={80} className="text-white mb-6" />
-                <h2 className="text-4xl font-black text-white uppercase tracking-wider mb-8">Exibível Já Utilizado</h2>
+                <AlertTriangle size={80} className="text-white" />
+                <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">Exibível Já Utilizado</h2>
                 
                 <div className="bg-black/20 w-full rounded-3xl p-6 backdrop-blur">
                   <p className="text-white/80 font-bold text-sm uppercase mb-1">Exibível</p>
@@ -378,24 +378,24 @@ export default function ScannerPage() {
 
             {scanResult.status === 'INVALID' && scanResult.message !== 'Validando...' && (
               <>
-                <XCircle size={80} className="text-white mb-6" />
-                <h2 className="text-4xl font-black text-white uppercase tracking-wider mb-4">QR Code Inválido</h2>
-                <p className="text-xl text-white/80 font-bold mb-8 max-w-xs mx-auto">
+                <XCircle size={80} className="text-white" />
+                <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">QR Code Inválido</h2>
+                <p className="text-xl text-white/80 font-bold max-w-xs mx-auto">
                   {scanResult.message || "Este exibível não foi encontrado no sistema."}
                 </p>
               </>
             )}
 
-          </div>
+            {scanResult.message !== 'Validando...' && (
+              <button 
+                onClick={handleNext}
+                className="w-full bg-white text-black font-black text-3xl py-6 rounded-3xl shadow-2xl active:scale-95 transition-transform mt-2 hover:bg-gray-100"
+              >
+                OK — LER PRÓXIMO
+              </button>
+            )}
 
-          {scanResult.message !== 'Validando...' && (
-            <button 
-              onClick={handleNext}
-              className="w-full bg-white text-black font-black text-3xl py-8 rounded-3xl shadow-2xl active:scale-95 transition-transform"
-            >
-              OK — LER PRÓXIMO
-            </button>
-          )}
+          </div>
 
         </div>
       )}

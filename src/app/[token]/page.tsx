@@ -19,6 +19,9 @@ type EventConfig = {
   place_name: string;
   address_line1: string;
   address_line2: string;
+  title_text?: string;
+  title_color?: string;
+  title_size?: number;
 };
 
 export default function DynamicTicketInvitationPage() {
@@ -33,6 +36,9 @@ export default function DynamicTicketInvitationPage() {
     place_name: "MAGIC BOOM",
     address_line1: "RUA CARLOS VASCONCELOS, 655",
     address_line2: "MEIRELES, FORTALEZA - CE",
+    title_text: "",
+    title_color: "#FFE800",
+    title_size: 28,
   });
 
   useEffect(() => {
@@ -100,7 +106,30 @@ export default function DynamicTicketInvitationPage() {
       <div className="w-full max-w-[500px] px-4 md:px-6 pt-10 flex flex-col items-center relative z-10 mx-auto">
         
         {/* Espaçamento inicial para alinhar com o fundo */}
-        <div className="h-[28vh] min-h-[180px] w-full shrink-0"></div>
+        <div className={config.title_text ? "h-[6vh] min-h-[40px] w-full shrink-0" : "h-[28vh] min-h-[180px] w-full shrink-0"}></div>
+
+        {/* Título de Texto Opcional */}
+        {config.title_text && (
+          <motion.div 
+            initial={{ y: -30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="text-center w-full z-20 flex flex-col items-center justify-center mt-2 mb-6 px-2"
+          >
+            <span 
+              className="font-montserrat font-black italic tracking-wide uppercase leading-tight text-center"
+              style={{ 
+                color: config.title_color || "#FFE800",
+                fontSize: `${config.title_size || 28}px`,
+                textShadow: `
+                  -2px -2px 0 #000B29, 2px -2px 0 #000B29, -2px 2px 0 #000B29, 2px 2px 0 #000B29,
+                  0px 4px 0px #000B29, 0px 4px 10px rgba(0,0,0,0.5)
+                `
+              }}
+            >
+              {config.title_text}
+            </span>
+          </motion.div>
+        )}
 
         {/* TICKET DIGITAL DO CONVIDADO */}
         <motion.div
