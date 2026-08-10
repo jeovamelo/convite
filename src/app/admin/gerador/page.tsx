@@ -368,7 +368,7 @@ export default function GeradorPage() {
                 type="text" 
                 autoFocus
                 placeholder="Nome do novo evento" 
-                className="border p-2 rounded-lg text-sm font-bold"
+                className="border p-2 rounded-lg text-sm font-bold text-gray-900"
                 value={newLayoutName}
                 onChange={e => setNewLayoutName(e.target.value)}
               />

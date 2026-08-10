@@ -63,7 +63,7 @@ function PortariaContent() {
             placeholder="Ex: LM-001"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sonicBlue"
+            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sonicBlue text-gray-900"
           />
         </div>
         <button
