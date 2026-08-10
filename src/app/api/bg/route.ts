@@ -20,8 +20,12 @@ export async function GET() {
     }
 
     const candidates = [
+      "/app/.data/background.png",
+      "/app/.data/background.jpg",
       path.join(process.cwd(), ".data", "background.png"),
       path.join(process.cwd(), ".data", "background.jpg"),
+      path.join(process.cwd(), "../..", ".data", "background.png"),
+      path.join(process.cwd(), "../..", ".data", "background.jpg"),
       path.join(process.cwd(), "public", "background.jpg"),
       path.join(process.cwd(), "public", "background.png"),
       process.env.BG_IMAGE_PATH,

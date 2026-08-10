@@ -3,6 +3,7 @@ services:
     build: .
     container_name: convite-app
     restart: always
+    user: "root"
     ports:
       - "3002:3002"
     env_file:

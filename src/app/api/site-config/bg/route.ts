@@ -28,8 +28,12 @@ export async function POST(req: NextRequest) {
 
     const { error: dbError } = await supabaseAdmin
       .from("settings")
-      .update({ base_image: base64 })
-      .eq("name", "Padrão (Inicial)");
+      .upsert({ 
+        name: "Padrão (Inicial)", 
+        base_image: base64 
+      }, {
+        onConflict: "name"
+      });
     if (dbError) {
       return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
