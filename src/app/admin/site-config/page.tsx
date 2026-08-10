@@ -266,9 +266,7 @@ export default function SiteConfigPage() {
             {/* Overlay simulation of the UI */}
             <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-between p-4 pt-8">
               <div className="text-center w-full">
-                <span className="text-white/85 text-[8px] font-black tracking-widest block uppercase">Aniversário do</span>
-                <span className="text-[#FFE800] text-3xl font-black italic tracking-tighter leading-none block font-montserrat">LUIZ</span>
-                <span className="text-white text-xl font-black italic tracking-tighter leading-none block font-montserrat -mt-1">MAURÍCIO</span>
+                {/* Título de texto removido para usar o da imagem */}
               </div>
 
               <div className="w-full space-y-2 mb-4">
