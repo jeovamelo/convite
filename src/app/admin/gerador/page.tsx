@@ -64,6 +64,22 @@ export default function GeradorPage() {
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
   const [editGuestName, setEditGuestName] = useState("");
   const [editWhatsapp, setEditWhatsapp] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const filteredTickets = tickets.filter(t => 
+    t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / itemsPerPage));
+  const paginatedTickets = filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page to 1 when search or limit changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, itemsPerPage]);
 
   const loadTickets = async () => {
     setLoadingTickets(true);
@@ -753,15 +769,33 @@ export default function GeradorPage() {
               <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
             </div>
             
-            <div className="relative w-full md:w-80">
-              <input 
-                type="text" 
-                placeholder="Buscar por ID, Nome ou Whatsapp..." 
-                className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-              <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+              {/* Limit selector */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-gray-400 uppercase">Por Página:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={e => setItemsPerPage(parseInt(e.target.value, 10))}
+                  className="border rounded-xl p-2 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={30}>30</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="relative w-full sm:w-64 md:w-80">
+                <input 
+                  type="text" 
+                  placeholder="Buscar por ID, Nome ou Whatsapp..." 
+                  className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
+              </div>
             </div>
           </div>
 
@@ -770,108 +804,156 @@ export default function GeradorPage() {
               <Loader2 className="animate-spin text-sonicCyan w-12 h-12" />
             </div>
           ) : (
-            <div className="flex-1 overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b">
-                    <th className="p-4">Exibível</th>
-                    <th className="p-4">Nome do Convidado</th>
-                    <th className="p-4">WhatsApp</th>
-                    <th className="p-4">Quantidade</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="font-inter text-sm text-gray-800">
-                  {tickets.filter(t => 
-                    t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
-                  ).length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
-                        Nenhum exibível encontrado.
-                      </td>
+            <div className="flex-1 flex flex-col justify-between">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b">
+                      <th className="p-4">Exibível</th>
+                      <th className="p-4">Nome do Convidado</th>
+                      <th className="p-4">WhatsApp</th>
+                      <th className="p-4">Quantidade</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 text-right">Ações</th>
                     </tr>
-                  ) : (
-                    tickets.filter(t => 
-                      t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
-                    ).map(t => (
-                      <tr key={t.id} className="hover:bg-gray-50 transition-colors border-b last:border-0">
-                        <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
-                        <td className="p-4">
-                          {editingTicketId === t.id ? (
-                            <input 
-                              type="text" 
-                              className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
-                              value={editGuestName}
-                              onChange={e => setEditGuestName(e.target.value)}
-                              placeholder="Nome do convidado"
-                            />
-                          ) : (
-                            <span className="font-bold">{t.guest_name || "—"}</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          {editingTicketId === t.id ? (
-                            <input 
-                              type="text" 
-                              className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
-                              value={editWhatsapp}
-                              onChange={e => setEditWhatsapp(e.target.value)}
-                              placeholder="Ex: 85999999999"
-                            />
-                          ) : (
-                            <span className="text-gray-600 font-semibold">{t.whatsapp || "—"}</span>
-                          )}
-                        </td>
-                        <td className="p-4 font-bold text-base">{t.quantidade_pessoas}</td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
-                            t.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {t.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          {editingTicketId === t.id ? (
-                            <div className="flex justify-end gap-2">
-                              <button 
-                                onClick={() => handleSaveTicket(t.id)}
-                                className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition-colors"
-                                title="Salvar"
-                              >
-                                <Check size={16} />
-                              </button>
-                              <button 
-                                onClick={() => setEditingTicketId(null)}
-                                className="bg-gray-200 hover:bg-gray-300 text-gray-600 p-2 rounded-lg transition-colors"
-                                title="Cancelar"
-                              >
-                                <XCircle size={16} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => {
-                                setEditingTicketId(t.id);
-                                setEditGuestName(t.guest_name || "");
-                                setEditWhatsapp(t.whatsapp || "");
-                              }}
-                              className="bg-sonicBlueMain/10 hover:bg-sonicBlueMain/20 text-sonicBlueMain p-2 rounded-lg transition-colors"
-                              title="Editar Convidado"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                          )}
+                  </thead>
+                  <tbody className="font-inter text-sm text-gray-800">
+                    {filteredTickets.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
+                          Nenhum exibível encontrado.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      paginatedTickets.map(t => (
+                        <tr key={t.id} className="hover:bg-gray-50 transition-colors border-b last:border-0">
+                          <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
+                          <td className="p-4">
+                            {editingTicketId === t.id ? (
+                              <input 
+                                type="text" 
+                                className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
+                                value={editGuestName}
+                                onChange={e => setEditGuestName(e.target.value)}
+                                placeholder="Nome do convidado"
+                              />
+                            ) : (
+                              <span className="font-bold">{t.guest_name || "—"}</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {editingTicketId === t.id ? (
+                              <input 
+                                type="text" 
+                                className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
+                                value={editWhatsapp}
+                                onChange={e => setEditWhatsapp(e.target.value)}
+                                placeholder="Ex: 85999999999"
+                              />
+                            ) : (
+                              <span className="text-gray-600 font-semibold">{t.whatsapp || "—"}</span>
+                            )}
+                          </td>
+                          <td className="p-4 font-bold text-base">{t.quantidade_pessoas}</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
+                              t.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {t.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            {editingTicketId === t.id ? (
+                              <div className="flex justify-end gap-2">
+                                <button 
+                                  onClick={() => handleSaveTicket(t.id)}
+                                  className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition-colors"
+                                  title="Salvar"
+                                >
+                                  <Check size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => setEditingTicketId(null)}
+                                  className="bg-gray-200 hover:bg-gray-300 text-gray-600 p-2 rounded-lg transition-colors"
+                                  title="Cancelar"
+                                >
+                                  <XCircle size={16} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => {
+                                  setEditingTicketId(t.id);
+                                  setEditGuestName(t.guest_name || "");
+                                  setEditWhatsapp(t.whatsapp || "");
+                                }}
+                                className="bg-sonicBlueMain/10 hover:bg-sonicBlueMain/20 text-sonicBlueMain p-2 rounded-lg transition-colors"
+                                title="Editar Convidado"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination controls footer */}
+              {filteredTickets.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-gray-100">
+                  <div className="text-xs font-bold text-gray-400 uppercase">
+                    Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, filteredTickets.length)} de {filteredTickets.length} exibíveis
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className="px-4 py-2 border rounded-xl font-bold text-xs uppercase transition-all disabled:opacity-40 disabled:pointer-events-none hover:bg-gray-50 active:scale-95 text-gray-600"
+                    >
+                      Anterior
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }).map((_, i) => {
+                        const page = i + 1;
+                        const isCurrent = currentPage === page;
+                        // Limit visible pages for high page counts
+                        if (totalPages > 6 && Math.abs(currentPage - page) > 1 && page !== 1 && page !== totalPages) {
+                          if (page === 2 || page === totalPages - 1) {
+                            return <span key={page} className="px-1 text-gray-400 text-xs font-bold">...</span>;
+                          }
+                          return null;
+                        }
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center transition-all ${
+                              isCurrent 
+                                ? "bg-sonicCyan text-white shadow-md shadow-sonicCyan/20" 
+                                : "hover:bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className="px-4 py-2 border rounded-xl font-bold text-xs uppercase transition-all disabled:opacity-40 disabled:pointer-events-none hover:bg-gray-50 active:scale-95 text-gray-600"
+                    >
+                      Próximo
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
