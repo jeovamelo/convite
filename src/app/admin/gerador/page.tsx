@@ -719,7 +719,7 @@ export default function GeradorPage() {
                     }}
                     bounds="parent"
                     lockAspectRatio={true}
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       setSelectedElement("qr");
                     }}
@@ -755,7 +755,7 @@ export default function GeradorPage() {
                       }));
                     }}
                     bounds="parent"
-                    onClick={(e) => {
+                    onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       setSelectedElement("id");
                     }}
