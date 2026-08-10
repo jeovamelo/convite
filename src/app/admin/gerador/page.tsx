@@ -59,7 +59,7 @@ export default function GeradorPage() {
 
   // Layout Management State
   const [layouts, setLayouts] = useState<{id: string, name: string}[]>([]);
-  const [selectedLayoutId, setSelectedLayoutId] = useState<string>("00000000-0000-0000-0000-000000000000");
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string>("");
   const [isCreatingLayout, setIsCreatingLayout] = useState(false);
   const [newLayoutName, setNewLayoutName] = useState("");
 
@@ -68,7 +68,17 @@ export default function GeradorPage() {
     try {
       const res = await fetch("/api/settings/list");
       const data = await res.json();
-      if (data.layouts) setLayouts(data.layouts);
+      if (data.layouts) {
+        setLayouts(data.layouts);
+        
+        // If selectedLayoutId is not set, load the last worked layout from localStorage or default to the first one in the list
+        const saved = localStorage.getItem("selectedLayoutId");
+        if (saved && data.layouts.some((l: any) => l.id === saved)) {
+          setSelectedLayoutId(saved);
+        } else if (data.layouts.length > 0) {
+          setSelectedLayoutId(data.layouts[0].id);
+        }
+      }
     } catch (e) {
       console.error("Erro ao carregar layouts", e);
     }
@@ -77,6 +87,13 @@ export default function GeradorPage() {
   useEffect(() => {
     loadLayouts();
   }, []);
+
+  // Save selected layout to localStorage
+  useEffect(() => {
+    if (selectedLayoutId) {
+      localStorage.setItem("selectedLayoutId", selectedLayoutId);
+    }
+  }, [selectedLayoutId]);
 
   // Load Settings and Image for selected layout
   useEffect(() => {
