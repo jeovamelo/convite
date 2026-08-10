@@ -57,9 +57,36 @@ export default function GeradorPage() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Load Settings and Image
+  // Layout Management State
+  const [layouts, setLayouts] = useState<{id: string, name: string}[]>([]);
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string>("00000000-0000-0000-0000-000000000000");
+  const [isCreatingLayout, setIsCreatingLayout] = useState(false);
+  const [newLayoutName, setNewLayoutName] = useState("");
+
+  // Load Layouts list
+  const loadLayouts = async () => {
+    try {
+      const res = await fetch("/api/settings/list");
+      const data = await res.json();
+      if (data.layouts) setLayouts(data.layouts);
+    } catch (e) {
+      console.error("Erro ao carregar layouts", e);
+    }
+  };
+
   useEffect(() => {
-    fetch("/api/settings")
+    loadLayouts();
+  }, []);
+
+  // Load Settings and Image for selected layout
+  useEffect(() => {
+    if (!selectedLayoutId) return;
+    
+    // Reset image preview when changing layout
+    setImageFile(null);
+    setImagePreview(null);
+    
+    fetch(`/api/settings?layout_id=${selectedLayoutId}`)
       .then(r => r.json())
       .then(data => {
         if (data.qr_size) {
@@ -70,17 +97,21 @@ export default function GeradorPage() {
           });
           if (data.quantity) setQuantity(data.quantity);
           if (data.peoplePerInvite) setPeoplePerInvite(data.peoplePerInvite);
+        } else {
+          // If no data, reset to defaults
+          setQrConfig({ x: 50, y: 50, size: 150 });
         }
       }).catch(console.error);
 
-    fetch("/api/settings/image")
+    fetch(`/api/settings/image?layout_id=${selectedLayoutId}`)
       .then(r => r.json())
       .then(data => {
         if (data.image) {
           setImagePreview(data.image);
         }
       }).catch(console.error);
-  }, []);
+  }, [selectedLayoutId]);
+
 
   // Auto-save debounce
   useEffect(() => {
@@ -93,30 +124,42 @@ export default function GeradorPage() {
   const handleSaveConfig = async (isAuto = false) => {
     if (!isAuto) setIsSaving(true);
     try {
-      await fetch("/api/settings", {
+      const settingsRes = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: selectedLayoutId,
+          name: layouts.find(l => l.id === selectedLayoutId)?.name || "Padrão",
           qr_x: qrConfig.x, qr_y: qrConfig.y, qr_size: qrConfig.size,
           id_x: idConfig.x, id_y: idConfig.y, id_width: idConfig.width, id_height: idConfig.height,
           id_color: idConfig.color, id_fontSize: idConfig.fontSize, id_fontWeight: idConfig.fontWeight,
           quantity, peoplePerInvite
         })
       });
+      if (!settingsRes.ok) {
+        const errData = await settingsRes.json().catch(() => null);
+        throw new Error(errData?.error || "Falha ao salvar configurações.");
+      }
 
       // Upload image if newly selected
       if (imageFile) {
         const formData = new FormData();
         formData.append("image", imageFile);
-        await fetch("/api/settings/image", {
+        formData.append("layout_id", selectedLayoutId);
+        const imageRes = await fetch("/api/settings/image", {
           method: "POST",
           body: formData
         });
+        if (!imageRes.ok) {
+          const errData = await imageRes.json().catch(() => null);
+          throw new Error(errData?.error || "Falha ao salvar imagem-base.");
+        }
       }
 
       setSaveStatus(isAuto ? "Salvo" : "✓ CONFIGURAÇÃO SALVA");
       if (!isAuto) setTimeout(() => setSaveStatus(null), 3000);
     } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao salvar.");
       console.error(e);
     }
     if (!isAuto) setIsSaving(false);
@@ -158,7 +201,11 @@ export default function GeradorPage() {
 
   const buildFormData = (publicId: string, token: string, isPreview: boolean) => {
     const formData = new FormData();
-    if(imageFile) formData.append("image", imageFile);
+    if (imageFile) {
+      formData.append("image", imageFile);
+    } else if (imagePreview) {
+      formData.append("image_data_url", imagePreview);
+    }
     
     formData.append("qr_x", Math.round(qrConfig.x * scale).toString());
     formData.append("qr_y", Math.round(qrConfig.y * scale).toString());
@@ -176,6 +223,7 @@ export default function GeradorPage() {
     formData.append("token", token);
     formData.append("is_preview", isPreview.toString());
     formData.append("peoplePerInvite", peoplePerInvite.toString());
+    formData.append("layout_id", selectedLayoutId);
     return formData;
   }
 
@@ -308,6 +356,67 @@ export default function GeradorPage() {
           
           {saveStatus && saveStatus !== 'Salvo' && (
             <p className="text-green-600 font-bold text-sm mt-1 animate-pulse">{saveStatus}</p>
+          )}
+        </div>
+        
+        {/* LAYOUT SELECTOR */}
+        <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+          <span className="text-sm font-bold text-gray-500 uppercase ml-2">Evento:</span>
+          {isCreatingLayout ? (
+            <div className="flex items-center gap-2">
+              <input 
+                type="text" 
+                autoFocus
+                placeholder="Nome do novo evento" 
+                className="border p-2 rounded-lg text-sm font-bold"
+                value={newLayoutName}
+                onChange={e => setNewLayoutName(e.target.value)}
+              />
+              <button 
+                onClick={async () => {
+                  if (!newLayoutName.trim()) { setIsCreatingLayout(false); return; }
+                  // Criar novo layout temporário e salvar para gerar ID (fake UUID para frontend, backend resolveria num POST real, mas faremos simples)
+                  const newId = crypto.randomUUID();
+                  const newLayout = { id: newId, name: newLayoutName.trim() };
+                  setLayouts([...layouts, newLayout]);
+                  setSelectedLayoutId(newId);
+                  setIsCreatingLayout(false);
+                  setNewLayoutName("");
+                  // Força um save inicial para registrar no BD
+                  setTimeout(() => {
+                    fetch("/api/settings", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: newId, name: newLayoutName.trim() })
+                    }).then(() => loadLayouts());
+                  }, 500);
+                }}
+                className="bg-green-500 text-white p-2 rounded-lg font-bold text-sm"
+              >
+                Criar
+              </button>
+              <button onClick={() => setIsCreatingLayout(false)} className="text-gray-500 hover:text-red-500">
+                <XCircle size={20} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <select 
+                value={selectedLayoutId} 
+                onChange={e => setSelectedLayoutId(e.target.value)}
+                className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sonicCyan focus:border-sonicCyan block w-full p-2.5 font-bold"
+              >
+                {layouts.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+              <button 
+                onClick={() => setIsCreatingLayout(true)}
+                className="bg-sonicBlueNavy text-white px-3 py-2.5 rounded-lg text-sm font-bold hover:bg-sonicBlueMain transition-colors whitespace-nowrap"
+              >
+                + Novo
+              </button>
+            </div>
           )}
         </div>
         

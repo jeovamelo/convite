@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --font-montserrat: "Montserrat", "Arial Black", "Helvetica Neue", sans-serif;
+  --font-inter: "Inter", "Segoe UI", "Arial", sans-serif;
+}
+
 @layer utilities {
   .text-shadow-hero {
     text-shadow: 2px 4px 0 #002A7A, 4px 8px 10px rgba(0,0,0,0.5);

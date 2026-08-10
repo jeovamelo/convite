@@ -4,12 +4,11 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 import JSZip from "jszip";
 import jsQR from "jsqr";
+import { supabase } from "@/lib/supabase";
 
 const generateSecureToken = (length = 16) => {
   return crypto.randomBytes(length).toString("hex");
 };
-
-const memoryDB: any[] = [];
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +38,15 @@ export async function POST(req: NextRequest) {
     const baseImageBuffer = Buffer.from(arrayBuffer);
 
     const zip = new JSZip();
-    const generatedRecords = [];
+    const generatedRecords: Array<{
+      id: string;
+      public_id: string;
+      token_hash: string;
+      quantidade_pessoas: number;
+      status: string;
+      created_at: string;
+      used_at: string | null;
+    }> = [];
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://festa.exemplo.com";
 
     for (let i = 1; i <= quantity; i++) {
@@ -105,7 +112,14 @@ export async function POST(req: NextRequest) {
         used_at: null
       };
       generatedRecords.push(record);
-      memoryDB.push(record);
+    }
+
+    const { error: insertError } = await supabase.from("tickets").upsert(generatedRecords, {
+      onConflict: "public_id",
+    });
+
+    if (insertError) {
+      throw insertError;
     }
 
     zip.file("database.json", JSON.stringify(generatedRecords, null, 2));

@@ -44,10 +44,26 @@ export async function POST(req: NextRequest) {
         .from('tickets')
         .update({ status: 'USED', used_at: now, checked_in_by: 'user_reception' })
         .eq('id', record.id)
+        .eq('status', 'AVAILABLE')
         .select()
         .single();
 
       if (updateError || !updatedRecord) {
+        const { data: latestRecord } = await supabase
+          .from('tickets')
+          .select('*')
+          .eq('id', record.id)
+          .single();
+
+        if (latestRecord?.status === 'USED') {
+          return NextResponse.json({
+            status: 'ALREADY_USED',
+            public_id: latestRecord.public_id,
+            guest_name: latestRecord.guest_name,
+            used_at: latestRecord.used_at,
+          });
+        }
+
         return NextResponse.json({ status: 'ERROR', message: 'Erro ao registrar check-in' }, { status: 500 });
       }
 

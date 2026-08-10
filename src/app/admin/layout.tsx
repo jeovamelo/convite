@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, QrCode, Ticket, Globe, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // If we are on the login page, don't render the sidebar
@@ -55,13 +56,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </nav>
 
       <div className="p-4 border-t border-white/10">
-        <Link 
-          href="/admin/login" 
+        <button
+          type="button"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            router.push("/admin/login");
+            router.refresh();
+          }}
           className="flex items-center justify-center gap-2 w-full p-3 rounded-xl text-white/50 hover:bg-white/10 hover:text-red-400 transition-colors font-bold text-sm"
         >
           <LogOut size={18} />
           SAIR
-        </Link>
+        </button>
       </div>
     </>
   );

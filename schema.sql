@@ -5,13 +5,15 @@ create table if not exists public.tickets (
   quantidade_pessoas int not null default 1,
   status text not null default 'AVAILABLE',
   guest_name text,
+  whatsapp text,
   checked_in_by text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   used_at timestamp with time zone
 );
 
 create table if not exists public.settings (
-  id int primary key default 1,
+  id uuid default gen_random_uuid() primary key,
+  name text unique not null,
   qr_x int default 50,
   qr_y int default 50,
   qr_size int default 150,
@@ -27,4 +29,4 @@ create table if not exists public.settings (
   base_image text
 );
 
-insert into public.settings (id) values (1) on conflict do nothing;
+insert into public.settings (id, name) values ('00000000-0000-0000-0000-000000000000', 'Padrão (Inicial)') on conflict do nothing;

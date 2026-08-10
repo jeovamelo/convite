@@ -3,14 +3,31 @@ import fs from "fs";
 import path from "path";
 
 export async function GET() {
-  const filePath = "C:\\Users\\jeova\\.gemini\\antigravity-ide\\brain\\43d24de8-d735-4403-b16e-fd09181038dc\\media__1786304857109.jpg";
-  
   try {
-    const fileBuffer = fs.readFileSync(filePath);
-    return new NextResponse(fileBuffer, {
+    const candidates = [
+      path.join(process.cwd(), "public", "background.jpg"),
+      path.join(process.cwd(), "public", "background.png"),
+      process.env.BG_IMAGE_PATH,
+    ].filter(Boolean) as string[];
+
+    for (const filePath of candidates) {
+      if (!fs.existsSync(filePath)) continue;
+      const fileBuffer = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+      return new NextResponse(fileBuffer, {
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#002A7A"/><stop offset="100%" stop-color="#001A55"/></linearGradient></defs><rect width="1200" height="1600" fill="url(#g)"/><g fill="#ffffff" fill-opacity="0.09"><circle cx="150" cy="180" r="80"/><circle cx="1030" cy="320" r="120"/><circle cx="250" cy="1180" r="140"/><circle cx="980" cy="1280" r="90"/></g></svg>`;
+    return new NextResponse(svg, {
       headers: {
-        "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Type": "image/svg+xml",
+        "Cache-Control": "public, max-age=3600",
       },
     });
   } catch (err) {
