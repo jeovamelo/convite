@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const safeFontSize = Math.max(1, Math.min(Number.isFinite(id_fontSize) ? id_fontSize : 24, safeIdHeight));
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://festa.exemplo.com";
-    const uniqueUrl = `${baseUrl}/e/${token}`;
+    const uniqueUrl = `${baseUrl}/${token}`;
 
     // 1. Generate QR Code
     const qrCodeBuffer = await QRCode.toBuffer(uniqueUrl, {

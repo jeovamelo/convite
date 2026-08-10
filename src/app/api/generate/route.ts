@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     for (let i = 1; i <= quantity; i++) {
       const publicId = `LM-${i.toString().padStart(4, "0")}`;
       const token = generateSecureToken();
-      const uniqueUrl = `${baseUrl}/e/${token}`;
+      const uniqueUrl = `${baseUrl}/${token}`;
 
       // 1. Generate QR Code
       const qrCodeBuffer = await QRCode.toBuffer(uniqueUrl, {
