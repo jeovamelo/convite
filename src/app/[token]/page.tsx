@@ -46,6 +46,18 @@ export default function DynamicTicketInvitationPage() {
 
     // Load ticket info
     if (!token) return;
+
+    if (token === "demo" || token === "preview") {
+      setTicket({
+        status: "AVAILABLE",
+        public_id: "LM-0000",
+        quantidade_pessoas: 1,
+        guest_name: "CONVIDADO DE PREVIEW"
+      });
+      setLoading(false);
+      return;
+    }
+
     fetch(`/api/ticket/${encodeURIComponent(token)}`)
       .then(async (r) => {
         const data = await r.json();

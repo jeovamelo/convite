@@ -16,7 +16,7 @@ export default function SiteConfigPage() {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sampleToken, setSampleToken] = useState<string>("");
+  const [sampleToken, setSampleToken] = useState<string>("demo");
   
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
