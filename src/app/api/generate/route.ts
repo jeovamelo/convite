@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 import JSZip from "jszip";
 import jsQR from "jsqr";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
 import fs from "fs";
 import path from "path";
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       const base64Data = imageDataUrl.includes(",") ? imageDataUrl.split(",")[1] : imageDataUrl;
       baseImageBuffer = Buffer.from(base64Data, "base64");
     } else if (layoutId) {
-      const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
+      const { data } = await supabaseAdmin.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
         if (data.base_image.startsWith("/uploads/")) {
           const filePath = path.join(process.cwd(), "public", data.base_image);
@@ -141,8 +141,12 @@ export async function POST(req: NextRequest) {
       generatedRecords.push(record);
     }
 
-    const { error: insertError } = await supabase.from("tickets").upsert(generatedRecords, {
+    // ignoreDuplicates: public_ids já existentes (e seus tokens/status de
+    // check-in) são preservados — regenerar um lote não invalida exibíveis
+    // já impressos nem zera entradas registradas.
+    const { error: insertError } = await supabaseAdmin.from("tickets").upsert(generatedRecords, {
       onConflict: "public_id",
+      ignoreDuplicates: true,
     });
 
     if (insertError) {

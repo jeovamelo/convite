@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase";
 
 export async function GET() {
   try {
@@ -15,6 +15,8 @@ export async function GET() {
       
     const exibiveisUtilizados = ticketsList.filter(r => r.status === 'USED').length;
     const exibiveisDisponiveis = ticketsList.filter(r => r.status === 'AVAILABLE').length;
+    const exibiveisCancelados = ticketsList.filter(r => r.status === 'CANCELLED').length;
+    const totalGerados = ticketsList.length;
 
     const ultimasEntradas = ticketsList
       .filter(r => r.status === 'USED' && r.used_at !== null)
@@ -26,6 +28,8 @@ export async function GET() {
       pessoasPresentes,
       exibiveisUtilizados,
       exibiveisDisponiveis,
+      exibiveisCancelados,
+      totalGerados,
       ultimasEntradas
     });
   } catch(e) {

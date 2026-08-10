@@ -11,6 +11,10 @@ create table if not exists public.tickets (
   used_at timestamp with time zone
 );
 
+-- ATENÇÃO: as colunas camelCase precisam de aspas duplas. Sem elas o
+-- PostgreSQL grava tudo em minúsculo e o PostgREST passa a rejeitar os
+-- campos id_fontSize / id_fontWeight / peoplePerInvite enviados pelo app
+-- (erro PGRST204) — foi isso que impedia as configurações de salvar.
 create table if not exists public.settings (
   id uuid default gen_random_uuid() primary key,
   name text unique not null,
@@ -22,10 +26,10 @@ create table if not exists public.settings (
   id_width int default 200,
   id_height int default 40,
   id_color text default '#FFD500',
-  id_fontSize int default 24,
-  id_fontWeight text default 'bold',
+  "id_fontSize" int default 24,
+  "id_fontWeight" text default 'bold',
   quantity int default 120,
-  peoplePerInvite int default 1,
+  "peoplePerInvite" int default 1,
   base_image text
 );
 

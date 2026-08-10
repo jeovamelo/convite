@@ -7,15 +7,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const layoutId = searchParams.get('layout_id');
 
-  let query = supabaseAdmin.from('settings').select('base_image');
-  
-  if (layoutId) {
-    query = query.eq('id', layoutId).single();
-  } else {
-    query = query.order('id', { ascending: true }).limit(1).single();
-  }
+  const baseQuery = supabaseAdmin.from('settings').select('base_image');
 
-  const { data, error } = await query;
+  const { data, error } = layoutId
+    ? await baseQuery.eq('id', layoutId).single()
+    : await baseQuery.order('id', { ascending: true }).limit(1).single();
   if (error && error.code !== 'PGRST116') {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import QRCode from "qrcode";
 import sharp from "sharp";
 import jsQR from "jsqr";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
 import fs from "fs";
 import path from "path";
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       const base64Data = imageDataUrl.includes(",") ? imageDataUrl.split(",")[1] : imageDataUrl;
       imageBuffer = Buffer.from(base64Data, "base64");
     } else if (layoutId) {
-      const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
+      const { data } = await supabaseAdmin.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
         if (data.base_image.startsWith("/uploads/")) {
           const filePath = path.join(process.cwd(), "public", data.base_image);
@@ -131,20 +131,28 @@ export async function POST(req: NextRequest) {
     // 5. Save to Supabase DB if not preview
     if (!isPreview) {
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const { data: exists } = await supabase
+      const { data: exists, error: lookupError } = await supabaseAdmin
         .from('tickets')
         .select('id')
         .eq('public_id', publicId)
-        .single();
-        
+        .maybeSingle();
+
+      if (lookupError) {
+        throw new Error(`Falha ao consultar o exibível ${publicId}: ${lookupError.message}`);
+      }
+
       if (!exists) {
-        await supabase.from('tickets').insert({
+        const { error: insertError } = await supabaseAdmin.from('tickets').insert({
           id: crypto.randomUUID(),
           public_id: publicId,
           token_hash: tokenHash,
           quantidade_pessoas: peoplePerInvite,
           status: 'AVAILABLE'
         });
+
+        if (insertError) {
+          throw new Error(`Falha ao salvar o exibível ${publicId} no banco: ${insertError.message}`);
+        }
       }
     }
 
