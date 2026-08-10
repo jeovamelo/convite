@@ -62,7 +62,7 @@ export default function DashboardPage() {
     : "—";
 
   const copiarLink = () => {
-    navigator.clipboard?.writeText(window.location.origin).catch(() => {});
+    navigator.clipboard?.writeText(window.location.origin + "/evento/demo").catch(() => {});
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
   };
@@ -181,7 +181,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="space-y-3">
-            <Link href="/" target="_blank" className="flex items-center justify-center gap-2 w-full text-center bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 rounded-xl transition-colors">
+            <Link href="/evento/demo" target="_blank" className="flex items-center justify-center gap-2 w-full text-center bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 rounded-xl transition-colors">
               <ExternalLink size={18} />
               VISUALIZAR SITE
             </Link>

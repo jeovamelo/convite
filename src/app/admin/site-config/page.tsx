@@ -289,7 +289,7 @@ export default function SiteConfigPage() {
             </button>
 
             <Link 
-              href="/" 
+              href="/evento/demo" 
               target="_blank" 
               className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-4 px-6 rounded-xl transition-all text-sm flex items-center gap-2 shadow-md"
             >
