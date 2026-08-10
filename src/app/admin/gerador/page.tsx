@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Edit2, Check, Plus } from "lucide-react";
+import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
 import JSZip from "jszip";
@@ -61,11 +61,16 @@ export default function GeradorPage() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingTickets, setLoadingTickets] = useState(false);
-  const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
-  const [editGuestName, setEditGuestName] = useState("");
-  const [editWhatsapp, setEditWhatsapp] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Inline editing: cada linha é editável direto na tabela, com auto-save
+  // (debounce) e salvamento imediato ao sair do campo (blur).
+  const [drafts, setDrafts] = useState<Record<string, { guest_name: string; whatsapp: string }>>({});
+  const [rowStatus, setRowStatus] = useState<Record<string, "saving" | "saved" | "error" | undefined>>({});
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const filteredTickets = tickets.filter(t => 
     t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -100,24 +105,68 @@ export default function GeradorPage() {
     }
   }, [activeTab]);
 
-  const handleSaveTicket = async (id: string) => {
+  // Preenche os rascunhos de edição inline quando a lista carrega
+  useEffect(() => {
+    setDrafts(prev => {
+      const next = { ...prev };
+      tickets.forEach(t => {
+        if (!next[t.id]) {
+          next[t.id] = { guest_name: t.guest_name || "", whatsapp: t.whatsapp || "" };
+        }
+      });
+      return next;
+    });
+  }, [tickets]);
+
+  const saveTicketInline = async (id: string) => {
+    const draft = draftsRef.current[id];
+    if (!draft) return;
+
+    setRowStatus(prev => ({ ...prev, [id]: "saving" }));
     try {
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id,
-          guest_name: editGuestName,
-          whatsapp: editWhatsapp
+          guest_name: draft.guest_name,
+          whatsapp: draft.whatsapp
         })
       });
       if (!res.ok) throw new Error("Erro ao salvar dados do convidado");
-      setEditingTicketId(null);
-      loadTickets();
+
+      // Mantém a lista base sincronizada com o que foi salvo
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, guest_name: draft.guest_name, whatsapp: draft.whatsapp } : t));
+      setRowStatus(prev => ({ ...prev, [id]: "saved" }));
+      setTimeout(() => {
+        setRowStatus(prev => (prev[id] === "saved" ? { ...prev, [id]: undefined } : prev));
+      }, 2500);
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : "Erro ao atualizar convite");
+      setRowStatus(prev => ({ ...prev, [id]: "error" }));
     }
+  };
+
+  const scheduleInlineSave = (id: string) => {
+    clearTimeout(saveTimers.current[id]);
+    saveTimers.current[id] = setTimeout(() => saveTicketInline(id), 800);
+  };
+
+  const handleInlineChange = (id: string, field: "guest_name" | "whatsapp", value: string) => {
+    setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+    setRowStatus(prev => ({ ...prev, [id]: undefined }));
+    scheduleInlineSave(id);
+  };
+
+  const handleInlineBlur = (id: string) => {
+    clearTimeout(saveTimers.current[id]);
+    const ticket = tickets.find(t => t.id === id);
+    const draft = draftsRef.current[id];
+    if (!ticket || !draft) return;
+    const changed =
+      (ticket.guest_name || "") !== draft.guest_name ||
+      (ticket.whatsapp || "") !== draft.whatsapp;
+    if (changed) saveTicketInline(id);
   };
 
   // Layout Management State
@@ -796,7 +845,7 @@ export default function GeradorPage() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                   <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
-                  <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
+                  <p className="text-gray-500 font-bold text-sm">Digite nome e WhatsApp direto na lista — salva automaticamente.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                   {/* Limit selector */}
@@ -843,7 +892,7 @@ export default function GeradorPage() {
                       <th className="p-4">WhatsApp</th>
                       <th className="p-4">Quantidade</th>
                       <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Ações</th>
+                      <th className="p-4 text-right">Salvamento</th>
                     </tr>
                   </thead>
                   <tbody className="font-inter text-sm text-gray-800">
@@ -858,30 +907,24 @@ export default function GeradorPage() {
                         <tr key={t.id} className="hover:bg-gray-50 transition-colors border-b last:border-0">
                           <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
                           <td className="p-4">
-                            {editingTicketId === t.id ? (
-                              <input 
-                                type="text" 
-                                className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
-                                value={editGuestName}
-                                onChange={e => setEditGuestName(e.target.value)}
-                                placeholder="Nome do convidado"
-                              />
-                            ) : (
-                              <span className="font-bold">{t.guest_name || "—"}</span>
-                            )}
+                            <input
+                              type="text"
+                              className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
+                              value={drafts[t.id]?.guest_name ?? ""}
+                              onChange={e => handleInlineChange(t.id, "guest_name", e.target.value)}
+                              onBlur={() => handleInlineBlur(t.id)}
+                              placeholder="Nome do convidado"
+                            />
                           </td>
                           <td className="p-4">
-                            {editingTicketId === t.id ? (
-                              <input 
-                                type="text" 
-                                className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
-                                value={editWhatsapp}
-                                onChange={e => setEditWhatsapp(e.target.value)}
-                                placeholder="Ex: 85999999999"
-                              />
-                            ) : (
-                              <span className="text-gray-600 font-semibold">{t.whatsapp || "—"}</span>
-                            )}
+                            <input
+                              type="text"
+                              className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
+                              value={drafts[t.id]?.whatsapp ?? ""}
+                              onChange={e => handleInlineChange(t.id, "whatsapp", e.target.value)}
+                              onBlur={() => handleInlineBlur(t.id)}
+                              placeholder="Ex: 85999999999"
+                            />
                           </td>
                           <td className="p-4 font-bold text-base">{t.quantidade_pessoas}</td>
                           <td className="p-4">
@@ -892,36 +935,23 @@ export default function GeradorPage() {
                             </span>
                           </td>
                           <td className="p-4 text-right">
-                            {editingTicketId === t.id ? (
-                              <div className="flex justify-end gap-2">
-                                <button 
-                                  onClick={() => handleSaveTicket(t.id)}
-                                  className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition-colors"
-                                  title="Salvar"
-                                >
-                                  <Check size={16} />
-                                </button>
-                                <button 
-                                  onClick={() => setEditingTicketId(null)}
-                                  className="bg-gray-200 hover:bg-gray-300 text-gray-600 p-2 rounded-lg transition-colors"
-                                  title="Cancelar"
-                                >
-                                  <XCircle size={16} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button 
-                                onClick={() => {
-                                  setEditingTicketId(t.id);
-                                  setEditGuestName(t.guest_name || "");
-                                  setEditWhatsapp(t.whatsapp || "");
-                                }}
-                                className="bg-sonicBlueMain/10 hover:bg-sonicBlueMain/20 text-sonicBlueMain p-2 rounded-lg transition-colors"
-                                title="Editar Convidado"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                            )}
+                            <div className="flex justify-end items-center gap-2 min-w-[80px]">
+                              {rowStatus[t.id] === "saving" && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
+                                  <Loader2 size={14} className="animate-spin" /> Salvando
+                                </span>
+                              )}
+                              {rowStatus[t.id] === "saved" && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-green-600">
+                                  <Check size={14} /> Salvo
+                                </span>
+                              )}
+                              {rowStatus[t.id] === "error" && (
+                                <span className="flex items-center gap-1 text-xs font-bold text-red-600">
+                                  <XCircle size={14} /> Erro ao salvar
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
