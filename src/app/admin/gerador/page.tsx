@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Edit2, Check } from "lucide-react";
+import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Edit2, Check, Plus } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
 import JSZip from "jszip";
@@ -415,7 +415,6 @@ export default function GeradorPage() {
         console.error("Erro ao gerar ZIP", e);
       }
     }
-
     setIsGenerating(false);
     if (errorCount === 0) {
       setSuccess(`Geração concluída! ${quantity} arquivos salvos.`);
@@ -426,110 +425,16 @@ export default function GeradorPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto min-h-[calc(100vh-80px)] flex flex-col relative">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-montserrat font-black italic text-sonicBlueNavy uppercase flex items-center gap-3">
-            Editor Visual de Exibíveis 
-            {saveStatus === 'Salvo' && <span className="text-sm font-normal text-gray-400 normal-case not-italic tracking-normal">({saveStatus})</span>}
-          </h2>
-          <p className="text-gray-500 font-inter font-bold">Posicione os elementos diretamente sobre a imagem.</p>
-          
-          {saveStatus && saveStatus !== 'Salvo' && (
-            <p className="text-green-600 font-bold text-sm mt-1 animate-pulse">{saveStatus}</p>
-          )}
-        </div>
+      <div className="mb-6">
+        <h2 className="text-3xl font-montserrat font-black italic text-sonicBlueNavy uppercase flex items-center gap-3">
+          Editor Visual de Exibíveis 
+          {saveStatus === 'Salvo' && <span className="text-sm font-normal text-gray-400 normal-case not-italic tracking-normal">({saveStatus})</span>}
+        </h2>
+        <p className="text-gray-500 font-inter font-bold">Posicione os elementos diretamente sobre a imagem.</p>
         
-        {/* LAYOUT SELECTOR */}
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-          <span className="text-sm font-bold text-gray-500 uppercase ml-2">Evento:</span>
-          {isCreatingLayout ? (
-            <div className="flex items-center gap-2">
-              <input 
-                type="text" 
-                autoFocus
-                placeholder="Nome do novo evento" 
-                className="border p-2 rounded-lg text-sm font-bold text-gray-900"
-                value={newLayoutName}
-                onChange={e => setNewLayoutName(e.target.value)}
-              />
-              <button 
-                onClick={async () => {
-                  if (!newLayoutName.trim()) { setIsCreatingLayout(false); return; }
-                  // Criar novo layout temporário e salvar para gerar ID (fake UUID para frontend, backend resolveria num POST real, mas faremos simples)
-                  const newId = crypto.randomUUID();
-                  const newLayout = { id: newId, name: newLayoutName.trim() };
-                  setLayouts([...layouts, newLayout]);
-                  setSelectedLayoutId(newId);
-                  setIsCreatingLayout(false);
-                  setNewLayoutName("");
-                  // Força um save inicial para registrar no BD
-                  setTimeout(() => {
-                    fetch("/api/settings", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ id: newId, name: newLayoutName.trim() })
-                    }).then(() => loadLayouts());
-                  }, 500);
-                }}
-                className="bg-green-500 text-white p-2 rounded-lg font-bold text-sm"
-              >
-                Criar
-              </button>
-              <button onClick={() => setIsCreatingLayout(false)} className="text-gray-500 hover:text-red-500">
-                <XCircle size={20} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <select 
-                value={selectedLayoutId} 
-                onChange={e => setSelectedLayoutId(e.target.value)}
-                className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sonicCyan focus:border-sonicCyan block w-full p-2.5 font-bold"
-              >
-                {layouts.map(l => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-              <button 
-                onClick={() => setIsCreatingLayout(true)}
-                className="bg-sonicBlueNavy text-white px-3 py-2.5 rounded-lg text-sm font-bold hover:bg-sonicBlueMain transition-colors whitespace-nowrap"
-              >
-                + Novo
-              </button>
-            </div>
-          )}
-        </div>
-        
-        <div className="flex gap-4">
-          <button 
-            onClick={() => setActiveTab('editor')}
-            className={`font-bold py-2 px-4 rounded-xl transition-colors ${activeTab === 'editor' ? 'bg-sonicBlueMain text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
-          >
-            EDITOR
-          </button>
-          <button 
-            onClick={() => setActiveTab('lista')}
-            className={`font-bold py-2 px-4 rounded-xl transition-colors ${activeTab === 'lista' ? 'bg-sonicBlueMain text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
-          >
-            LISTA DE EXIBÍVEIS
-          </button>
-
-          <button 
-            onClick={handlePreview}
-            disabled={(!imageFile && !imagePreview) || isGenerating}
-            className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-colors shadow-md disabled:opacity-50"
-          >
-            <Eye size={20} /> PRÉVIA
-          </button>
-          <button 
-            onClick={handleBatchGenerate}
-            disabled={isGenerating || (!imageFile && !imagePreview)}
-            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50 transition-colors shadow-md"
-          >
-            <Download size={20} />
-            GERAR {quantity === 1 ? '1 EXIBÍVEL' : `${quantity} EXIBÍVEIS`}
-          </button>
-        </div>
+        {saveStatus && saveStatus !== 'Salvo' && (
+          <p className="text-green-600 font-bold text-sm mt-1 animate-pulse">{saveStatus}</p>
+        )}
       </div>
 
       {error && (
@@ -550,14 +455,74 @@ export default function GeradorPage() {
         </div>
       )}
 
-      <div className="flex flex-1 gap-6 pb-10">
+      <div className="flex flex-col lg:flex-row gap-6 pb-10 flex-1">
         
-        {activeTab === 'editor' && (
-          <>
-            {/* LEFT PANEL: Layers & Properties */}
-            <div className="w-80 flex flex-col gap-6 shrink-0">
+        {/* LEFT COLUMN: Properties & Configurations */}
+        <div className="w-80 flex flex-col gap-6 shrink-0">
           
-          {/* Upload */}
+          {/* Nome do Evento (Layout Selector) */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 text-sm uppercase mb-3 flex items-center justify-between">
+              <span>Nome do Evento</span>
+            </h3>
+            {isCreatingLayout ? (
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="Nome do novo evento" 
+                  className="flex-1 border p-2 rounded-lg text-sm font-bold text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                  value={newLayoutName}
+                  onChange={e => setNewLayoutName(e.target.value)}
+                />
+                <button 
+                  onClick={async () => {
+                    if (!newLayoutName.trim()) { setIsCreatingLayout(false); return; }
+                    const newId = crypto.randomUUID();
+                    const newLayout = { id: newId, name: newLayoutName.trim() };
+                    setLayouts([...layouts, newLayout]);
+                    setSelectedLayoutId(newId);
+                    setIsCreatingLayout(false);
+                    setNewLayoutName("");
+                    setTimeout(() => {
+                      fetch("/api/settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: newId, name: newLayoutName.trim() })
+                      }).then(() => loadLayouts());
+                    }, 500);
+                  }}
+                  className="bg-green-500 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-green-600 transition-colors"
+                >
+                  Criar
+                </button>
+                <button onClick={() => setIsCreatingLayout(false)} className="text-gray-400 hover:text-red-500">
+                  <XCircle size={20} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <select 
+                  value={selectedLayoutId} 
+                  onChange={e => setSelectedLayoutId(e.target.value)}
+                  className="flex-1 bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sonicCyan focus:border-sonicCyan p-2.5 font-bold"
+                >
+                  {layouts.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={() => setIsCreatingLayout(true)}
+                  title="Novo Evento"
+                  className="bg-sonicBlueNavy text-white p-2.5 rounded-lg text-sm font-bold hover:bg-sonicBlueMain transition-colors flex items-center justify-center shrink-0"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 1. Imagem Base */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">1. Imagem Base</h3>
             <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -569,7 +534,7 @@ export default function GeradorPage() {
             </label>
           </div>
 
-          {/* Camadas */}
+          {/* 2. Camadas */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">2. Camadas</h3>
             <div className="space-y-2">
@@ -590,7 +555,7 @@ export default function GeradorPage() {
 
           {/* Properties */}
           {selectedElement && (
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex-1">
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="font-bold text-gray-800 text-sm uppercase mb-4 flex items-center gap-2">
                 <Settings2 size={16} /> 
                 Propriedades: {selectedElement === "qr" ? "QR Code" : "ID"}
@@ -639,7 +604,7 @@ export default function GeradorPage() {
             </div>
           )}
 
-          {/* Gerar Lote */}
+          {/* 3. Configuração do Lote */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">3. Configuração do Lote</h3>
             <div className="space-y-4">
@@ -659,117 +624,180 @@ export default function GeradorPage() {
               </div>
             </div>
           </div>
-
-          {/* Botão Salvar Configuração */}
-          <button 
-            onClick={() => handleSaveConfig(false)}
-            disabled={isSaving}
-            className="w-full bg-sonicBlueNavy hover:bg-sonicBlueMain text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-            SALVAR
-          </button>
-        </div>
-
-        {/* RIGHT PANEL: Canvas */}
-        <div className="flex-1 bg-gray-200 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center p-8 relative">
-          
-          {!imagePreview && (
-            <div className="text-center text-gray-400">
-              <ImageIcon size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="font-bold text-lg">Faça o upload de uma imagem para iniciar.</p>
-            </div>
-          )}
-
-          {imagePreview && (
-            <div 
-              className="relative shadow-2xl" 
-              ref={containerRef}
-              style={{ maxWidth: '100%', maxHeight: '100%', display: 'inline-block' }}
-              onClick={() => setSelectedElement(null)}
+          {/* Stack de Botões de Ação na ordem vertical solicitada */}
+          <div className="flex flex-col gap-3">
+            {/* 1. Prévia */}
+            <button 
+              onClick={handlePreview}
+              disabled={(!imageFile && !imagePreview) || isGenerating}
+              className="w-full bg-sonicCyan hover:bg-[#1da5cf] text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={imagePreview} 
-                alt="Canvas" 
-                className="max-w-full max-h-[700px] block pointer-events-none select-none"
-                onLoad={handleImageLoad}
-              />
-              
-              {/* QR Code RND Component */}
-              <Rnd
-                size={{ width: qrConfig.size, height: qrConfig.size }}
-                position={{ x: qrConfig.x, y: qrConfig.y }}
-                onDragStop={(e, d) => { setQrConfig(p => ({ ...p, x: d.x, y: d.y })); setSelectedElement("qr"); }}
-                onResizeStop={(e, direction, ref, delta, position) => {
-                  setQrConfig({
-                    size: parseInt(ref.style.width, 10),
-                    x: position.x,
-                    y: position.y
-                  });
-                  setSelectedElement("qr");
-                }}
-                lockAspectRatio={true}
-                bounds="parent"
-                className={`flex items-center justify-center bg-white ${selectedElement === "qr" ? "ring-4 ring-sonicCyan shadow-xl z-20" : "z-10 ring-2 ring-gray-300 shadow"}`}
-                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedElement("qr"); }}
-              >
-                <div className="w-full h-full p-2 pointer-events-none flex items-center justify-center">
-                   <QRCodeSVG value="https://preview.local/exibivel/demo" width="100%" height="100%" />
-                </div>
-                {selectedElement === "qr" && <div className="absolute -top-6 left-0 bg-sonicCyan text-white text-[10px] font-bold px-2 py-1 rounded shadow">QR CODE</div>}
-              </Rnd>
+              <Eye size={20} /> PRÉVIA
+            </button>
 
-              {/* ID RND Component */}
-              <Rnd
-                size={{ width: idConfig.width, height: idConfig.height }}
-                position={{ x: idConfig.x, y: idConfig.y }}
-                onDragStop={(e, d) => { setIdConfig(p => ({ ...p, x: d.x, y: d.y })); setSelectedElement("id"); }}
-                onResizeStop={(e, direction, ref, delta, position) => {
-                  setIdConfig(p => ({
-                    ...p,
-                    width: parseInt(ref.style.width, 10),
-                    height: parseInt(ref.style.height, 10),
-                    x: position.x,
-                    y: position.y
-                  }));
-                  setSelectedElement("id");
-                }}
-                bounds="parent"
-                className={`flex items-center ${selectedElement === "id" ? "ring-2 ring-sonicCyan shadow-xl bg-sonicCyan/10 z-20" : "z-10 hover:ring-1 hover:ring-gray-300"}`}
-                style={{ 
-                  justifyContent: idConfig.align === 'center' ? 'center' : idConfig.align === 'right' ? 'flex-end' : 'flex-start'
-                }}
-                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedElement("id"); }}
-              >
-                <span 
-                  className="pointer-events-none whitespace-nowrap"
-                  style={{
-                    color: idConfig.color,
-                    fontSize: `${idConfig.fontSize}px`,
-                    fontWeight: idConfig.fontWeight,
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
+            {/* 2. Salvar */}
+            <button 
+              onClick={() => handleSaveConfig(false)}
+              disabled={isSaving}
+              className="w-full bg-sonicBlueNavy hover:bg-sonicBlueMain text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+              SALVAR
+            </button>
+
+            {/* 3. Gerar */}
+            <button 
+              onClick={handleBatchGenerate}
+              disabled={isGenerating || (!imageFile && !imagePreview)}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-colors shadow-md"
+            >
+              {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+              GERAR
+            </button>
+          </div>
+
+        </div>
+
+        {/* RIGHT/MAIN PANEL: Tabs Navigation */}
+        <div className="flex-1 flex flex-col gap-6">
+          
+          {/* Custom Tabs Navigation */}
+          <div className="flex border-b border-gray-200 bg-white px-6 rounded-2xl shadow-sm">
+            <button 
+              onClick={() => setActiveTab('editor')}
+              className={`font-black uppercase text-xs tracking-wider py-4 px-6 border-b-4 transition-colors ${activeTab === 'editor' ? 'border-sonicBlueMain text-sonicBlueMain' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              Editor
+            </button>
+            <button 
+              onClick={() => setActiveTab('lista')}
+              className={`font-black uppercase text-xs tracking-wider py-4 px-6 border-b-4 transition-colors ${activeTab === 'lista' ? 'border-sonicBlueMain text-sonicBlueMain' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              Lista de Exibíveis
+            </button>
+          </div>
+
+          {/* Tab Content 1: Editor */}
+          {activeTab === 'editor' && (
+            <div className="flex-1 bg-gray-200 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center p-8 relative min-h-[500px]">
+              
+              {!imagePreview && (
+                <div className="text-center text-gray-400">
+                  <ImageIcon size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="font-bold text-lg">Faça o upload de uma imagem para iniciar.</p>
+                </div>
+              )}
+
+              {imagePreview && (
+                <div 
+                  className="relative shadow-2xl" 
+                  ref={containerRef}
+                  style={{ maxWidth: '100%', maxHeight: '100%', display: 'inline-block' }}
+                  onClick={() => setSelectedElement(null)}
                 >
-                  LM-0001
-                </span>
-                {selectedElement === "id" && <div className="absolute -top-6 left-0 bg-sonicCyan text-white text-[10px] font-bold px-2 py-1 rounded shadow">ID</div>}
-              </Rnd>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src={imagePreview} 
+                    alt="Canvas" 
+                    className="max-w-full max-h-[700px] block pointer-events-none select-none"
+                    onLoad={handleImageLoad}
+                  />
+                  
+                  {/* QR Code RND Component */}
+                  <Rnd
+                    size={{ width: qrConfig.size * scale, height: qrConfig.size * scale }}
+                    position={{ x: qrConfig.x * scale, y: qrConfig.y * scale }}
+                    onDragStop={(e, d) => {
+                      setQrConfig(prev => ({ ...prev, x: d.x / scale, y: d.y / scale }));
+                    }}
+                    onResizeStop={(e, direction, ref, delta, position) => {
+                      setQrConfig({
+                        x: position.x / scale,
+                        y: position.y / scale,
+                        size: ref.offsetWidth / scale
+                      });
+                    }}
+                    bounds="parent"
+                    lockAspectRatio={true}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedElement("qr");
+                    }}
+                    enableResizing={{
+                      topLeft: selectedElement === "qr",
+                      topRight: selectedElement === "qr",
+                      bottomLeft: selectedElement === "qr",
+                      bottomRight: selectedElement === "qr"
+                    }}
+                    disableDragging={isGenerating}
+                    className={`border-2 ${selectedElement === "qr" ? "border-sonicCyan z-40" : "border-transparent hover:border-gray-400 z-30"}`}
+                  >
+                    <div className="w-full h-full bg-white p-1 relative flex items-center justify-center">
+                      <QRCodeSVG value="https://convite.ilocseguro.com/evento/demo" size={256} className="w-full h-full" />
+                      {selectedElement === "qr" && <div className="absolute -top-6 left-0 bg-sonicCyan text-white text-[10px] font-bold px-2 py-1 rounded shadow">QR CODE</div>}
+                    </div>
+                  </Rnd>
+
+                  {/* ID RND Component */}
+                  <Rnd
+                    size={{ width: idConfig.width * scale, height: idConfig.height * scale }}
+                    position={{ x: idConfig.x * scale, y: idConfig.y * scale }}
+                    onDragStop={(e, d) => {
+                      setIdConfig(prev => ({ ...prev, x: d.x / scale, y: d.y / scale }));
+                    }}
+                    onResizeStop={(e, direction, ref, delta, position) => {
+                      setIdConfig(prev => ({
+                        ...prev,
+                        x: position.x / scale,
+                        y: position.y / scale,
+                        width: ref.offsetWidth / scale,
+                        height: ref.offsetHeight / scale
+                      }));
+                    }}
+                    bounds="parent"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedElement("id");
+                    }}
+                    enableResizing={{
+                      left: selectedElement === "id",
+                      right: selectedElement === "id",
+                      top: selectedElement === "id",
+                      bottom: selectedElement === "id",
+                      topLeft: selectedElement === "id",
+                      topRight: selectedElement === "id",
+                      bottomLeft: selectedElement === "id",
+                      bottomRight: selectedElement === "id"
+                    }}
+                    disableDragging={isGenerating}
+                    className={`border-2 flex items-center justify-center ${selectedElement === "id" ? "border-sonicCyan z-40" : "border-transparent hover:border-gray-400 z-30"}`}
+                  >
+                    <span 
+                      className="font-montserrat leading-none text-center select-none block w-full whitespace-nowrap"
+                      style={{ 
+                        fontSize: `${idConfig.fontSize * scale}px`,
+                        color: idConfig.color,
+                        fontWeight: idConfig.fontWeight,
+                        fontFamily: 'Montserrat, sans-serif'
+                      }}
+                    >
+                      LM-0001
+                    </span>
+                    {selectedElement === "id" && <div className="absolute -top-6 left-0 bg-sonicCyan text-white text-[10px] font-bold px-2 py-1 rounded shadow">ID</div>}
+                  </Rnd>
+                </div>
+              )}
             </div>
           )}
-        </div>
-        </>
-      )}
 
-      {activeTab === 'lista' && (
-        <div className="flex-1 bg-white rounded-3xl shadow-sm p-8 flex flex-col">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div>
-              <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
-              <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {/* Tab Content 2: Lista */}
+          {activeTab === 'lista' && (
+            <div className="flex-1 bg-white rounded-3xl shadow-sm p-8 flex flex-col min-h-[500px]">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
+                  <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
+                </div>
               {/* Limit selector */}
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs font-bold text-gray-400 uppercase">Por Página:</span>
