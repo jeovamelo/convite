@@ -4,6 +4,8 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 import jsQR from "jsqr";
 import { supabase } from "@/lib/supabase";
+import fs from "fs";
+import path from "path";
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,8 +42,15 @@ export async function POST(req: NextRequest) {
     } else if (layoutId) {
       const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
-        const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
-        imageBuffer = Buffer.from(base64Data, 'base64');
+        if (data.base_image.startsWith("/uploads/")) {
+          const filePath = path.join(process.cwd(), "public", data.base_image);
+          if (fs.existsSync(filePath)) {
+            imageBuffer = fs.readFileSync(filePath);
+          }
+        } else {
+          const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
+          imageBuffer = Buffer.from(base64Data, 'base64');
+        }
       }
     }
 

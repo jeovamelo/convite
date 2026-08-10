@@ -11,6 +11,8 @@ services:
       - SUPABASE_INTERNAL_URL=http://kong:8000
     networks:
       - convite-supabase
+    volumes:
+      - ./uploads:/app/public/uploads
 
 networks:
   convite-supabase:

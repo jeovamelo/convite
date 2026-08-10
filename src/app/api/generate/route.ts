@@ -5,6 +5,8 @@ import sharp from "sharp";
 import JSZip from "jszip";
 import jsQR from "jsqr";
 import { supabase } from "@/lib/supabase";
+import fs from "fs";
+import path from "path";
 
 const generateSecureToken = (length = 16) => {
   return crypto.randomBytes(length).toString("hex");
@@ -46,8 +48,15 @@ export async function POST(req: NextRequest) {
     } else if (layoutId) {
       const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
-        const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
-        baseImageBuffer = Buffer.from(base64Data, 'base64');
+        if (data.base_image.startsWith("/uploads/")) {
+          const filePath = path.join(process.cwd(), "public", data.base_image);
+          if (fs.existsSync(filePath)) {
+            baseImageBuffer = fs.readFileSync(filePath);
+          }
+        } else {
+          const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
+          baseImageBuffer = Buffer.from(base64Data, 'base64');
+        }
       }
     }
 
