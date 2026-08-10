@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Visão Geral", path: "/admin/dashboard", icon: <LayoutDashboard size={20} /> },
     { name: "Exibíveis", path: "/admin/gerador", icon: <Ticket size={20} /> },
     { name: "Recepção", path: "/admin/recepcao", icon: <QrCode size={20} /> },
-    { name: "Site do Aniversário", path: "/", icon: <Globe size={20} />, external: true },
+    { name: "Site do Aniversário", path: "/admin/site-config", icon: <Globe size={20} /> },
   ];
 
   const SidebarContent = () => (

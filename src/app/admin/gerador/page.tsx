@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle } from "lucide-react";
+import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Edit2, Check } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
 import JSZip from "jszip";
@@ -56,6 +56,53 @@ export default function GeradorPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Tickets List State
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
+  const [editGuestName, setEditGuestName] = useState("");
+  const [editWhatsapp, setEditWhatsapp] = useState("");
+
+  const loadTickets = async () => {
+    setLoadingTickets(true);
+    try {
+      const res = await fetch("/api/tickets");
+      const data = await res.json();
+      if (data.tickets) setTickets(data.tickets);
+    } catch (e) {
+      console.error("Erro ao carregar exibiveis", e);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "lista") {
+      loadTickets();
+    }
+  }, [activeTab]);
+
+  const handleSaveTicket = async (id: string) => {
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          guest_name: editGuestName,
+          whatsapp: editWhatsapp
+        })
+      });
+      if (!res.ok) throw new Error("Erro ao salvar dados do convidado");
+      setEditingTicketId(null);
+      loadTickets();
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Erro ao atualizar convite");
+    }
+  };
 
   // Layout Management State
   const [layouts, setLayouts] = useState<{id: string, name: string}[]>([]);
@@ -699,13 +746,134 @@ export default function GeradorPage() {
       )}
 
       {activeTab === 'lista' && (
-        <div className="flex-1 bg-white rounded-3xl shadow-sm p-8">
-          <h3 className="text-2xl font-black italic text-gray-800 mb-6">Lista de Exibíveis Gerados</h3>
-          <p className="text-gray-500 mb-8 font-bold">Nesta aba, em breve, aparecerão todos os exibíveis que você gerou, podendo visualizar e baixar novamente caso perca o ZIP.</p>
-          <div className="bg-gray-100 p-10 rounded-2xl text-center">
-             <QrCode size={48} className="mx-auto text-gray-400 mb-4" />
-             <p className="text-gray-500 font-bold">Construção da Listagem em Andamento...</p>
+        <div className="flex-1 bg-white rounded-3xl shadow-sm p-8 flex flex-col">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+              <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
+              <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
+            </div>
+            
+            <div className="relative w-full md:w-80">
+              <input 
+                type="text" 
+                placeholder="Buscar por ID, Nome ou Whatsapp..." 
+                className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
+            </div>
           </div>
+
+          {loadingTickets ? (
+            <div className="flex-1 flex items-center justify-center py-20">
+              <Loader2 className="animate-spin text-sonicCyan w-12 h-12" />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b">
+                    <th className="p-4">Exibível</th>
+                    <th className="p-4">Nome do Convidado</th>
+                    <th className="p-4">WhatsApp</th>
+                    <th className="p-4">Quantidade</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="font-inter text-sm text-gray-800">
+                  {tickets.filter(t => 
+                    t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
+                        Nenhum exibível encontrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    tickets.filter(t => 
+                      t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).map(t => (
+                      <tr key={t.id} className="hover:bg-gray-50 transition-colors border-b last:border-0">
+                        <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
+                        <td className="p-4">
+                          {editingTicketId === t.id ? (
+                            <input 
+                              type="text" 
+                              className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
+                              value={editGuestName}
+                              onChange={e => setEditGuestName(e.target.value)}
+                              placeholder="Nome do convidado"
+                            />
+                          ) : (
+                            <span className="font-bold">{t.guest_name || "—"}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {editingTicketId === t.id ? (
+                            <input 
+                              type="text" 
+                              className="border p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm"
+                              value={editWhatsapp}
+                              onChange={e => setEditWhatsapp(e.target.value)}
+                              placeholder="Ex: 85999999999"
+                            />
+                          ) : (
+                            <span className="text-gray-600 font-semibold">{t.whatsapp || "—"}</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-bold text-base">{t.quantidade_pessoas}</td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
+                            t.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {t.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          {editingTicketId === t.id ? (
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => handleSaveTicket(t.id)}
+                                className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition-colors"
+                                title="Salvar"
+                              >
+                                <Check size={16} />
+                              </button>
+                              <button 
+                                onClick={() => setEditingTicketId(null)}
+                                className="bg-gray-200 hover:bg-gray-300 text-gray-600 p-2 rounded-lg transition-colors"
+                                title="Cancelar"
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                setEditingTicketId(t.id);
+                                setEditGuestName(t.guest_name || "");
+                                setEditWhatsapp(t.whatsapp || "");
+                              }}
+                              className="bg-sonicBlueMain/10 hover:bg-sonicBlueMain/20 text-sonicBlueMain p-2 rounded-lg transition-colors"
+                              title="Editar Convidado"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
       </div>

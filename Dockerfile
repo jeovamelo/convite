@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache fontconfig ttf-dejavu
 
 # Install dependencies only when needed
 FROM base AS deps

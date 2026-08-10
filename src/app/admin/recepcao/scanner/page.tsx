@@ -26,7 +26,7 @@ export default function ScannerPage() {
   const streamRef = useRef<MediaStream | null>(null);
   
   // Stats overlay
-  const [stats, setStats] = useState({ presentes: 0, utilizados: 0, total: 0 });
+  const [stats, setStats] = useState({ presentes: 0, utilizados: 0, total: 0, convidadosPrevistos: 0 });
 
   const scannerEnabled = useRef(true);
   const requestRef = useRef<number>();
@@ -38,7 +38,8 @@ export default function ScannerPage() {
       setStats({
         presentes: data.pessoasPresentes,
         utilizados: data.exibiveisUtilizados,
-        total: data.exibiveisUtilizados + data.exibiveisDisponiveis
+        total: data.exibiveisUtilizados + data.exibiveisDisponiveis,
+        convidadosPrevistos: data.convidadosPrevistos
       });
     } catch(e) {}
   };
@@ -326,9 +327,24 @@ export default function ScannerPage() {
                   {scanResult.guest_name && (
                     <p className="text-2xl font-bold text-white mb-2">{scanResult.guest_name}</p>
                   )}
-                  <p className="text-white/60 font-bold text-sm">
+                  <p className="text-white/60 font-bold text-sm mb-4">
                     Entrada às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
+
+                  <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/20 text-white font-bold text-xs uppercase">
+                    <div>
+                      <span className="text-white/60 block text-[10px] mb-1">Entraram</span>
+                      <span className="text-2xl font-black">{stats.presentes}</span>
+                    </div>
+                    <div>
+                      <span className="text-white/60 block text-[10px] mb-1">Faltam</span>
+                      <span className="text-2xl font-black">{Math.max(0, stats.convidadosPrevistos - stats.presentes)}</span>
+                    </div>
+                    <div>
+                      <span className="text-white/60 block text-[10px] mb-1">Esperado</span>
+                      <span className="text-2xl font-black">{stats.convidadosPrevistos}</span>
+                    </div>
+                  </div>
                 </div>
               </>
             )}

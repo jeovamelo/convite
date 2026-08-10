@@ -5,6 +5,8 @@ import path from "path";
 export async function GET() {
   try {
     const candidates = [
+      path.join(process.cwd(), ".data", "background.png"),
+      path.join(process.cwd(), ".data", "background.jpg"),
       path.join(process.cwd(), "public", "background.jpg"),
       path.join(process.cwd(), "public", "background.png"),
       process.env.BG_IMAGE_PATH,
@@ -18,7 +20,7 @@ export async function GET() {
       return new NextResponse(fileBuffer, {
         headers: {
           "Content-Type": contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
         },
       });
     }

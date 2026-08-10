@@ -13,6 +13,7 @@ services:
       - convite-supabase
     volumes:
       - ./uploads:/app/public/uploads
+      - ./data:/app/.data
 
 networks:
   convite-supabase:

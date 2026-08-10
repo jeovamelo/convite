@@ -4,7 +4,25 @@ import { motion } from "framer-motion";
 import { Calendar, Clock, MapPin, Navigation } from "lucide-react";
 import Image from "next/image";
 
+import { useEffect, useState } from "react";
+
 export default function Home() {
+  const [config, setConfig] = useState({
+    day: "19/08/2026",
+    time: "19 HORAS",
+    place_name: "MAGIC BOOM",
+    address_line1: "RUA CARLOS VASCONCELOS, 655",
+    address_line2: "MEIRELES, FORTALEZA - CE"
+  });
+
+  useEffect(() => {
+    fetch("/api/site-config")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.day) setConfig(data);
+      })
+      .catch(console.error);
+  }, []);
   return (
     <main 
       className="min-h-[100dvh] pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center justify-start overflow-x-hidden relative w-full bg-cover bg-center bg-fixed bg-no-repeat"
@@ -101,7 +119,7 @@ export default function Home() {
             </div>
             <div>
               <p className="font-inter font-bold text-white/70 text-xs uppercase tracking-wider">DIA</p>
-              <p className="font-montserrat font-black text-sonicYellow text-xl">19/08/2026</p>
+              <p className="font-montserrat font-black text-sonicYellow text-xl">{config.day}</p>
             </div>
           </motion.div>
 
@@ -117,7 +135,7 @@ export default function Home() {
             </div>
             <div>
               <p className="font-inter font-bold text-white/70 text-xs uppercase tracking-wider">ÀS</p>
-              <p className="font-montserrat font-black text-sonicYellow text-xl">19 HORAS</p>
+              <p className="font-montserrat font-black text-sonicYellow text-xl">{config.time}</p>
             </div>
           </motion.div>
 
@@ -133,7 +151,7 @@ export default function Home() {
             </div>
             <div>
               <p className="font-inter font-bold text-white/70 text-xs uppercase tracking-wider">NO BUFFET</p>
-              <p className="font-montserrat font-black text-white text-xl">MAGIC BOOM</p>
+              <p className="font-montserrat font-black text-white text-xl">{config.place_name}</p>
             </div>
           </motion.div>
 
@@ -147,16 +165,16 @@ export default function Home() {
             {/* Card de Endereço */}
             <div className="bg-sonicBlueNavy/90 backdrop-blur-sm border-2 border-b-0 border-sonicCyan rounded-t-3xl p-5 text-center shadow-solid-3d w-full">
               <p className="font-inter font-bold text-white text-[clamp(0.8rem,4vw,1rem)] mb-1 leading-snug">
-                RUA CARLOS VASCONCELOS, 655
+                {config.address_line1}
               </p>
               <p className="font-montserrat font-black text-sonicYellow text-[clamp(1rem,5vw,1.125rem)] leading-snug">
-                MEIRELES, FORTALEZA - CE
+                {config.address_line2}
               </p>
             </div>
             
             {/* Botão Google Maps colado no Endereço */}
             <a 
-              href="https://www.google.com/maps/search/?api=1&query=Rua+Carlos+Vasconcelos%2C+655%2C+Meireles%2C+Fortaleza+-+CE" 
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${config.address_line1}, ${config.address_line2}`)}`} 
               target="_blank" 
               rel="noreferrer" 
               className="block w-full"

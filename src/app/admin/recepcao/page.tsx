@@ -44,6 +44,13 @@ export default function RecepcaoPage() {
       <div className="text-center mb-8">
         <h1 className="text-4xl font-black font-montserrat italic text-sonicBlueNavy uppercase tracking-wider">Recepção</h1>
         <p className="text-gray-500 font-inter font-bold text-lg mt-1">Aniversário do Luiz Maurício</p>
+        
+        <Link href="/admin/recepcao/scanner" className="block mt-6 max-w-sm mx-auto">
+          <button className="w-full bg-green-500 hover:bg-green-600 text-white font-black text-xl py-4 px-4 rounded-2xl shadow-[0_6px_20px_-5px_rgba(34,197,94,0.4)] transition-all flex items-center justify-center gap-3 uppercase tracking-wider active:scale-95">
+            <Camera size={24} />
+            INICIAR RECEPÇÃO
+          </button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -82,13 +89,6 @@ export default function RecepcaoPage() {
           <div className="bg-sonicBlueMain h-6 rounded-full transition-all duration-500" style={{ width: `${progresso}%` }}></div>
         </div>
       </div>
-
-      <Link href="/admin/recepcao/scanner" className="block">
-        <button className="w-full bg-green-500 hover:bg-green-600 text-white font-black text-2xl py-6 px-4 rounded-3xl shadow-[0_10px_25px_-5px_rgba(34,197,94,0.5)] transition-all flex items-center justify-center gap-4 uppercase tracking-widest active:scale-95">
-          <Camera size={36} />
-          INICIAR RECEPÇÃO
-        </button>
-      </Link>
 
       <div className="mt-12">
         <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2">
