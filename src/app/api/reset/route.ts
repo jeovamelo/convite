@@ -9,8 +9,11 @@ export async function POST(req: NextRequest) {
 
     if (action === "tickets") {
       // Delete all tickets
-      const { error } = await supabase.from("tickets").delete().neq("id", "00000000-0000-0000-0000-000000000000"); // deletes everything
-      if (error) throw error;
+      const { error } = await supabase.from("tickets").delete().not("id", "is", null);
+      if (error) {
+        console.error("Error deleting tickets:", error);
+        throw error;
+      }
       return NextResponse.json({ success: true, message: "Todos os exibíveis foram deletados." });
     }
 
@@ -18,14 +21,18 @@ export async function POST(req: NextRequest) {
       // Reset reception (make all used tickets available again)
       const { error } = await supabase
         .from("tickets")
-        .update({ status: "AVAILABLE", used_at: null })
-        .neq("id", "00000000-0000-0000-0000-000000000000"); // updates everything
-      if (error) throw error;
+        .update({ status: "AVAILABLE", used_at: null, checked_in_by: null })
+        .not("id", "is", null);
+      if (error) {
+        console.error("Error resetting reception:", error);
+        throw error;
+      }
       return NextResponse.json({ success: true, message: "A recepção foi resetada. Todos os exibíveis estão disponíveis para uso." });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
+    console.error("Reset API catch error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
