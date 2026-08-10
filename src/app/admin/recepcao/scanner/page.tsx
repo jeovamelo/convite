@@ -318,6 +318,15 @@ export default function ScannerPage() {
                 <CheckCircle size={80} className="text-white" />
                 <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">Entrada Registrada</h2>
                 
+                {scanResult.message !== 'Validando...' && (
+                  <button 
+                    onClick={handleNext}
+                    className="w-full bg-white text-black font-black text-3xl py-6 rounded-3xl shadow-2xl active:scale-95 transition-transform my-4 hover:bg-gray-100"
+                  >
+                    OK — LER PRÓXIMO
+                  </button>
+                )}
+
                 <div className="bg-black/20 w-full rounded-3xl p-6 backdrop-blur">
                   <p className="text-white/80 font-bold text-sm uppercase mb-1">Exibível</p>
                   <p className="text-5xl font-black text-white mb-6 font-montserrat">{scanResult.public_id}</p>
@@ -356,6 +365,15 @@ export default function ScannerPage() {
                 <AlertTriangle size={80} className="text-white" />
                 <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">Exibível Já Utilizado</h2>
                 
+                {scanResult.message !== 'Validando...' && (
+                  <button 
+                    onClick={handleNext}
+                    className="w-full bg-white text-black font-black text-3xl py-6 rounded-3xl shadow-2xl active:scale-95 transition-transform my-4 hover:bg-gray-100"
+                  >
+                    OK — LER PRÓXIMO
+                  </button>
+                )}
+
                 <div className="bg-black/20 w-full rounded-3xl p-6 backdrop-blur">
                   <p className="text-white/80 font-bold text-sm uppercase mb-1">Exibível</p>
                   <p className="text-5xl font-black text-white mb-6 font-montserrat">{scanResult.public_id}</p>
@@ -380,19 +398,20 @@ export default function ScannerPage() {
               <>
                 <XCircle size={80} className="text-white" />
                 <h2 className="text-4xl font-black text-white uppercase tracking-wider -mt-2">QR Code Inválido</h2>
+                
+                {scanResult.message !== 'Validando...' && (
+                  <button 
+                    onClick={handleNext}
+                    className="w-full bg-white text-black font-black text-3xl py-6 rounded-3xl shadow-2xl active:scale-95 transition-transform my-4 hover:bg-gray-100"
+                  >
+                    OK — LER PRÓXIMO
+                  </button>
+                )}
+
                 <p className="text-xl text-white/80 font-bold max-w-xs mx-auto">
                   {scanResult.message || "Este exibível não foi encontrado no sistema."}
                 </p>
               </>
-            )}
-
-            {scanResult.message !== 'Validando...' && (
-              <button 
-                onClick={handleNext}
-                className="w-full bg-white text-black font-black text-3xl py-6 rounded-3xl shadow-2xl active:scale-95 transition-transform mt-2 hover:bg-gray-100"
-              >
-                OK — LER PRÓXIMO
-              </button>
             )}
 
           </div>
