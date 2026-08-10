@@ -15,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
-  const navItems = [
+  const navItems: { name: string; path: string; icon: React.ReactNode; external?: boolean }[] = [
     { name: "Visão Geral", path: "/admin/dashboard", icon: <LayoutDashboard size={20} /> },
     { name: "Exibíveis", path: "/admin/gerador", icon: <Ticket size={20} /> },
     { name: "Recepção", path: "/admin/recepcao", icon: <QrCode size={20} /> },
