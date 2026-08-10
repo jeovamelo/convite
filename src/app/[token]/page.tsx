@@ -99,63 +99,8 @@ export default function DynamicTicketInvitationPage() {
       {/* Container Principal Mobile */}
       <div className="w-full max-w-[500px] px-4 md:px-6 pt-10 flex flex-col items-center relative z-10 mx-auto">
         
-        {/* SELO 4 ANOS (Flutuante) */}
-        <motion.div 
-          initial={{ scale: 0, rotate: -20 }}
-          animate={{ scale: 1, rotate: 10 }}
-          transition={{ type: "spring", stiffness: 200, delay: 0.5 }}
-          className="absolute top-8 right-2 z-30 flex items-center justify-center w-20 h-20 bg-sonicBlueDark rounded-full border-[3px] border-sonicGold shadow-glow-gold"
-        >
-          <div className="text-center font-montserrat leading-none transform -rotate-6">
-            <span className="block text-3xl font-black text-sonicYellow">4</span>
-            <span className="block text-[10px] font-bold text-white tracking-widest bg-sonicRed px-1 rounded">ANOS</span>
-          </div>
-        </motion.div>
-
-        {/* CABEÇALHO (LOGO TYPOGRAPHY) */}
-        <motion.div 
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="text-center w-full z-20 flex flex-col items-center justify-center mt-6 px-2"
-        >
-          <div className="flex flex-col items-center transform -skew-x-6 w-full">
-            <span 
-              className="text-white font-montserrat font-black italic tracking-wider leading-none text-[clamp(1.1rem,5vw,1.5rem)]"
-              style={{ 
-                textShadow: `
-                  -2px -2px 0 #000B29, 2px -2px 0 #000B29, -2px 2px 0 #000B29, 2px 2px 0 #000B29,
-                  0px 4px 0px #000B29, 0px 4px 10px rgba(0,0,0,0.5)
-                `
-              }}
-            >
-              ANIVERSÁRIO DO
-            </span>
-            <span 
-              className="text-[#FFE800] font-montserrat font-black italic tracking-tight leading-[0.85] -mt-1 text-[clamp(3.8rem,18vw,6rem)]"
-              style={{ 
-                textShadow: `
-                  -3px -3px 0 #000B29, 3px -3px 0 #000B29, -3px 3px 0 #000B29, 3px 3px 0 #000B29,
-                  -3px 0px 0 #000B29, 3px 0px 0 #000B29, 0px -3px 0 #000B29, 0px 3px 0 #000B29,
-                  0px 6px 0px #000B29, 0px 6px 15px rgba(0,0,0,0.6)
-                `
-              }}
-            >
-              LUIZ
-            </span>
-            <span 
-              className="text-white font-montserrat font-black italic tracking-tighter leading-[0.8] -mt-1 text-[clamp(2.6rem,12vw,4.5rem)]"
-              style={{ 
-                textShadow: `
-                  -3px -3px 0 #000B29, 3px -3px 0 #000B29, -3px 3px 0 #000B29, 3px 3px 0 #000B29,
-                  -3px 0px 0 #000B29, 3px 0px 0 #000B29, 0px -3px 0 #000B29, 0px 3px 0 #000B29,
-                  0px 5px 0px #000B29, 0px 5px 12px rgba(0,0,0,0.5)
-                `
-              }}
-            >
-              MAURÍCIO
-            </span>
-          </div>
-        </motion.div>
+        {/* Espaçamento inicial para alinhar com o fundo */}
+        <div className="h-[28vh] min-h-[180px] w-full shrink-0"></div>
 
         {/* TICKET DIGITAL DO CONVIDADO */}
         <motion.div
