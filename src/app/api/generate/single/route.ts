@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     const peoplePerInvite = parseInt(formData.get("peoplePerInvite") as string, 10) || 1;
     const imageDataUrl = formData.get("image_data_url") as string | null;
 
+    const layoutId = formData.get("layout_id") as string;
+
     let imageBuffer: Buffer | null = null;
     
     if (imageFile) {
@@ -35,8 +37,8 @@ export async function POST(req: NextRequest) {
     } else if (imageDataUrl) {
       const base64Data = imageDataUrl.includes(",") ? imageDataUrl.split(",")[1] : imageDataUrl;
       imageBuffer = Buffer.from(base64Data, "base64");
-    } else {
-      const { data } = await supabase.from('settings').select('base_image').eq('id', 1).single();
+    } else if (layoutId) {
+      const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
         const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
         imageBuffer = Buffer.from(base64Data, 'base64');

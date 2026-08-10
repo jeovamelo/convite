@@ -29,13 +29,31 @@ export async function POST(req: NextRequest) {
 
     const quantity = parseInt(formData.get("quantity") as string, 10);
     const peoplePerInvite = parseInt(formData.get("peoplePerInvite") as string, 10);
+    const imageDataUrl = formData.get("image_data_url") as string | null;
+    const layoutId = formData.get("layout_id") as string;
 
-    if (!imageFile || isNaN(qr_x) || isNaN(qr_y) || isNaN(qr_size) || isNaN(quantity)) {
+    if ((!imageFile && !imageDataUrl && !layoutId) || isNaN(qr_x) || isNaN(qr_y) || isNaN(qr_size) || isNaN(quantity)) {
       return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 });
     }
 
-    const arrayBuffer = await imageFile.arrayBuffer();
-    const baseImageBuffer = Buffer.from(arrayBuffer);
+    let baseImageBuffer: Buffer | null = null;
+    
+    if (imageFile) {
+      baseImageBuffer = Buffer.from(await imageFile.arrayBuffer());
+    } else if (imageDataUrl) {
+      const base64Data = imageDataUrl.includes(",") ? imageDataUrl.split(",")[1] : imageDataUrl;
+      baseImageBuffer = Buffer.from(base64Data, "base64");
+    } else if (layoutId) {
+      const { data } = await supabase.from('settings').select('base_image').eq('id', layoutId).single();
+      if (data?.base_image) {
+        const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
+        baseImageBuffer = Buffer.from(base64Data, 'base64');
+      }
+    }
+
+    if (!baseImageBuffer) {
+      return NextResponse.json({ error: "Missing image file and no base image configured." }, { status: 400 });
+    }
 
     const zip = new JSZip();
     const generatedRecords: Array<{
