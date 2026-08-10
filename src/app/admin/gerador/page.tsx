@@ -220,7 +220,7 @@ export default function GeradorPage() {
     const formData = new FormData();
     if (imageFile) {
       formData.append("image", imageFile);
-    } else if (imagePreview) {
+    } else if (imagePreview && imagePreview.startsWith("data:image/")) {
       formData.append("image_data_url", imagePreview);
     }
     
