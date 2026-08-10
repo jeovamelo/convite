@@ -21,10 +21,15 @@ export default function GeradorPage() {
   
   const [naturalWidth, setNaturalWidth] = useState(1);
   const [naturalHeight, setNaturalHeight] = useState(1);
-  
+
+  // imgRef tracks the actual rendered <img> element so we can measure
+  // its rendered width/height precisely (not the wrapping container).
+  const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1);
+  // scale = naturalWidth / rendered_img_width  (used to convert DOM px ↔ natural px)
   const [scale, setScale] = useState(1);
+  const [scaleY, setScaleY] = useState(1);
 
   // Editor State
   const [activeTab, setActiveTab] = useState<"editor" | "lista">("editor");
@@ -304,29 +309,36 @@ export default function GeradorPage() {
     }
   };
 
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    const img = e.currentTarget;
-    setNaturalWidth(img.naturalWidth);
-    setNaturalHeight(img.naturalHeight);
-    
-    if (containerRef.current) {
-      const cw = containerRef.current.clientWidth;
-      setContainerWidth(cw);
-      setScale(img.naturalWidth / cw);
+  // Recalculates scale whenever the rendered image dimensions change.
+  const recalcScale = (img: HTMLImageElement) => {
+    const renderedW = img.offsetWidth;
+    const renderedH = img.offsetHeight;
+    if (renderedW > 0 && img.naturalWidth > 0) {
+      setNaturalWidth(img.naturalWidth);
+      setNaturalHeight(img.naturalHeight);
+      setScale(img.naturalWidth / renderedW);
+      setScaleY(img.naturalHeight / renderedH);
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
     }
   };
 
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    recalcScale(e.currentTarget);
+  };
+
+  // ResizeObserver on the img itself to handle window/panel resize.
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current && naturalWidth > 1) {
-        const cw = containerRef.current.clientWidth;
-        setContainerWidth(cw);
-        setScale(naturalWidth / cw);
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [naturalWidth]);
+    const img = imgRef.current;
+    if (!img) return;
+    const ro = new ResizeObserver(() => {
+      if (img.naturalWidth > 0) recalcScale(img);
+    });
+    ro.observe(img);
+    return () => ro.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imagePreview]);
 
   const buildFormData = (publicId: string, token: string, isPreview: boolean) => {
     const formData = new FormData();
@@ -749,25 +761,26 @@ export default function GeradorPage() {
                   onClick={() => setSelectedElement(null)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img 
-                    src={imagePreview} 
-                    alt="Canvas" 
+                  <img
+                    ref={imgRef}
+                    src={imagePreview}
+                    alt="Canvas"
                     className="max-w-full max-h-[700px] block pointer-events-none select-none"
                     onLoad={handleImageLoad}
                   />
                   
                   {/* QR Code RND Component */}
                   <Rnd
-                    size={{ width: qrConfig.size * scale, height: qrConfig.size * scale }}
-                    position={{ x: qrConfig.x * scale, y: qrConfig.y * scale }}
+                    size={{ width: qrConfig.size / scale, height: qrConfig.size / scaleY }}
+                    position={{ x: qrConfig.x / scale, y: qrConfig.y / scaleY }}
                     onDragStop={(e, d) => {
-                      setQrConfig(prev => ({ ...prev, x: d.x / scale, y: d.y / scale }));
+                      setQrConfig(prev => ({ ...prev, x: Math.round(d.x * scale), y: Math.round(d.y * scaleY) }));
                     }}
                     onResizeStop={(e, direction, ref, delta, position) => {
                       setQrConfig({
-                        x: position.x / scale,
-                        y: position.y / scale,
-                        size: ref.offsetWidth / scale
+                        x: Math.round(position.x * scale),
+                        y: Math.round(position.y * scaleY),
+                        size: Math.round(ref.offsetWidth * scale)
                       });
                     }}
                     bounds="parent"
@@ -798,18 +811,18 @@ export default function GeradorPage() {
 
                   {/* ID RND Component */}
                   <Rnd
-                    size={{ width: idConfig.width * scale, height: idConfig.height * scale }}
-                    position={{ x: idConfig.x * scale, y: idConfig.y * scale }}
+                    size={{ width: idConfig.width / scale, height: idConfig.height / scaleY }}
+                    position={{ x: idConfig.x / scale, y: idConfig.y / scaleY }}
                     onDragStop={(e, d) => {
-                      setIdConfig(prev => ({ ...prev, x: d.x / scale, y: d.y / scale }));
+                      setIdConfig(prev => ({ ...prev, x: Math.round(d.x * scale), y: Math.round(d.y * scaleY) }));
                     }}
                     onResizeStop={(e, direction, ref, delta, position) => {
                       setIdConfig(prev => ({
                         ...prev,
-                        x: position.x / scale,
-                        y: position.y / scale,
-                        width: ref.offsetWidth / scale,
-                        height: ref.offsetHeight / scale
+                        x: Math.round(position.x * scale),
+                        y: Math.round(position.y * scaleY),
+                        width: Math.round(ref.offsetWidth * scale),
+                        height: Math.round(ref.offsetHeight * scaleY)
                       }));
                     }}
                     bounds="parent"
@@ -830,10 +843,10 @@ export default function GeradorPage() {
                     disableDragging={isGenerating}
                     className={`border-2 flex items-center justify-center ${selectedElement === "id" ? "border-sonicCyan z-40" : "border-transparent hover:border-gray-400 z-30"}`}
                   >
-                    <span 
+                    <span
                       className="font-montserrat leading-none text-center select-none block w-full whitespace-nowrap"
-                      style={{ 
-                        fontSize: `${idConfig.fontSize * scale}px`,
+                      style={{
+                        fontSize: `${idConfig.fontSize / scale}px`,
                         color: idConfig.color,
                         fontWeight: idConfig.fontWeight,
                         fontFamily: 'Montserrat, sans-serif'
