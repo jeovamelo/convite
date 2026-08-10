@@ -8,9 +8,15 @@ function isPublicPath(pathname: string) {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const method = req.method;
 
   if (pathname === "/admin") {
     return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+  }
+
+  // Allow public GET to site-config
+  if (pathname === "/api/site-config" && method === "GET") {
+    return NextResponse.next();
   }
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/api")) {
