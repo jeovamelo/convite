@@ -46,6 +46,8 @@ export default function ScannerPage() {
 
   useEffect(() => {
     loadStats();
+    const interval = setInterval(loadStats, 5000); // 5s polling for multi-device sync
+    return () => clearInterval(interval);
   }, [scanResult]); // reload stats when a scan completes
 
   const playSound = (type: 'success' | 'error') => {
