@@ -16,10 +16,11 @@ export default function SiteConfigPage() {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sampleToken, setSampleToken] = useState<string>("");
   
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("/api/bg");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
@@ -29,6 +30,16 @@ export default function SiteConfigPage() {
       .then((data) => {
         if (data.day) {
           setConfig(data);
+        }
+      })
+      .catch(console.error);
+
+    // Load sample ticket token for previewing
+    fetch("/api/tickets")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.tickets && data.tickets.length > 0) {
+          setSampleToken(data.tickets[0].token);
         }
       })
       .catch(console.error);
@@ -233,7 +244,11 @@ export default function SiteConfigPage() {
               )}
             </button>
 
-            <Link href="/" target="_blank" className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-4 px-6 rounded-xl transition-all text-sm flex items-center gap-2 shadow-md">
+            <Link 
+              href={sampleToken ? `/${sampleToken}` : "/"} 
+              target="_blank" 
+              className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-4 px-6 rounded-xl transition-all text-sm flex items-center gap-2 shadow-md"
+            >
               <Globe size={18} />
               VER SITE
             </Link>
@@ -273,12 +288,18 @@ export default function SiteConfigPage() {
                   </div>
                 </div>
 
-                <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl p-2 text-left flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-sonicBlueMain flex items-center justify-center text-white text-[10px] font-bold">L</div>
-                  <div>
-                    <span className="text-white/60 text-[6px] uppercase font-bold block">Local</span>
-                    <span className="text-white text-[10px] font-bold font-montserrat leading-tight block">{config.place_name}</span>
-                    <span className="text-white/70 text-[8px] leading-tight block">{config.address_line1}</span>
+                <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl p-2 text-left flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-sonicBlueMain flex items-center justify-center text-white text-[10px] font-bold">L</div>
+                    <div>
+                      <span className="text-white/60 text-[6px] uppercase font-bold block">Local</span>
+                      <span className="text-white text-[10px] font-bold font-montserrat leading-tight block">{config.place_name}</span>
+                      <span className="text-white/70 text-[8px] leading-tight block">{config.address_line1}</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-white text-sonicBlueMain rounded-lg p-1.5 flex items-center justify-center gap-1.5 font-inter font-black text-[8px] shadow-sm uppercase">
+                    <MapPin size={10} />
+                    ABRIR NO GOOGLE MAPS
                   </div>
                 </div>
               </div>
