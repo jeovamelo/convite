@@ -49,6 +49,8 @@ export default function DynamicTicketInvitationPage() {
     title_size: 28,
   });
 
+  const isDemo = token === "demo" || token === "preview";
+
   useEffect(() => {
     // Load event site config
     fetch("/api/site-config")
@@ -58,16 +60,8 @@ export default function DynamicTicketInvitationPage() {
       })
       .catch(console.error);
 
-    // Load ticket info
-    if (!token) return;
-
-    if (token === "demo" || token === "preview") {
-      setTicket({
-        status: "AVAILABLE",
-        public_id: "LM-0000",
-        quantidade_pessoas: 1,
-        guest_name: "CONVIDADO DE PREVIEW"
-      });
+    // Load ticket info (skip for demo/preview)
+    if (!token || isDemo) {
       setLoading(false);
       return;
     }
@@ -79,7 +73,7 @@ export default function DynamicTicketInvitationPage() {
       })
       .catch(() => setTicket({ status: "INVALID" }))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, isDemo]);
 
   if (loading) {
     return (
@@ -90,7 +84,7 @@ export default function DynamicTicketInvitationPage() {
     );
   }
 
-  if (!ticket || ticket.status === "INVALID") {
+  if (!isDemo && (!ticket || ticket.status === "INVALID")) {
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-red-500/20 p-6 rounded-full mb-6">
@@ -102,8 +96,8 @@ export default function DynamicTicketInvitationPage() {
     );
   }
 
-  const isUsed = ticket.status === "USED";
-  const isCancelled = ticket.status === "CANCELLED";
+  const isUsed = ticket?.status === "USED";
+  const isCancelled = ticket?.status === "CANCELLED";
 
   return (
     <main className="min-h-[100dvh] w-full bg-gray-950 flex justify-center md:py-8 md:px-4">
@@ -144,80 +138,84 @@ export default function DynamicTicketInvitationPage() {
           </motion.div>
         )}
 
-        {/* TICKET DIGITAL DO CONVIDADO */}
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 150, delay: 0.3 }}
-          className="w-full bg-sonicBlueNavy/95 border-4 border-sonicCyan rounded-[32px] p-6 shadow-solid-3d-cyan relative overflow-hidden mt-6 z-20"
-        >
-          <div className="relative z-10 flex flex-col items-center">
-            <div className="bg-sonicGold text-sonicBlueNavy font-inter font-black px-4 py-1 rounded-full text-[10px] uppercase tracking-widest mb-4">
-              Exibível Oficial
-            </div>
-
-            <h2 className="font-montserrat font-black text-white text-3xl mb-1">{ticket.public_id}</h2>
-
-            {ticket.guest_name && (
-              <p className="font-inter text-white font-black text-xl mb-1 text-center">{ticket.guest_name}</p>
-            )}
-
-            <div className="flex items-center gap-2 text-sonicCyan font-inter font-bold text-sm mb-4">
-              <Users size={16} />
-              <span>
-                Válido para {ticket.quantidade_pessoas}{" "}
-                {ticket.quantidade_pessoas === 1 ? "pessoa" : "pessoas"}
-              </span>
-            </div>
-
-            {/* QR Code do exibível — visível e escaneável na portaria */}
-            {!isCancelled && ticketUrl && (
-              <div className="bg-white p-3 rounded-2xl shadow-xl mb-4">
-                <QRCodeSVG value={ticketUrl} size={180} level="H" includeMargin={false} />
-              </div>
-            )}
-
-            {!isUsed && !isCancelled && (
-              <div className="flex items-center justify-center gap-2 bg-green-500/20 text-green-400 font-inter font-bold py-2 px-4 rounded-xl border border-green-500/30 text-sm">
-                <CheckCircle size={18} />
-                <span>Válido — apresente o QR Code</span>
-              </div>
-            )}
-
-            {isUsed && (
-              <div className="flex flex-col items-center gap-1 bg-yellow-500/20 text-sonicYellow font-inter font-bold py-2 px-4 rounded-xl border border-sonicYellow/30 text-sm text-center">
-                <div className="flex items-center gap-1.5 justify-center">
-                  <AlertCircle size={18} />
-                  <span>Entrada já registrada</span>
+        {/* TICKET DIGITAL DO CONVIDADO — only for real tokens */}
+        {!isDemo && ticket && (
+          <>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 150, delay: 0.3 }}
+              className="w-full bg-sonicBlueNavy/95 border-4 border-sonicCyan rounded-[32px] p-6 shadow-solid-3d-cyan relative overflow-hidden mt-6 z-20"
+            >
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="bg-sonicGold text-sonicBlueNavy font-inter font-black px-4 py-1 rounded-full text-[10px] uppercase tracking-widest mb-4">
+                  Exibível Oficial
                 </div>
-                {ticket.used_at && (
-                  <span className="text-white/60 text-xs font-normal">
-                    em {new Date(ticket.used_at).toLocaleString("pt-BR")}
+
+                <h2 className="font-montserrat font-black text-white text-3xl mb-1">{ticket.public_id}</h2>
+
+                {ticket.guest_name && (
+                  <p className="font-inter text-white font-black text-xl mb-1 text-center">{ticket.guest_name}</p>
+                )}
+
+                <div className="flex items-center gap-2 text-sonicCyan font-inter font-bold text-sm mb-4">
+                  <Users size={16} />
+                  <span>
+                    Válido para {ticket.quantidade_pessoas}{" "}
+                    {ticket.quantidade_pessoas === 1 ? "pessoa" : "pessoas"}
                   </span>
+                </div>
+
+                {/* QR Code do exibível — visível e escaneável na portaria */}
+                {!isCancelled && ticketUrl && (
+                  <div className="bg-white p-3 rounded-2xl shadow-xl mb-4">
+                    <QRCodeSVG value={ticketUrl} size={180} level="H" includeMargin={false} />
+                  </div>
+                )}
+
+                {!isUsed && !isCancelled && (
+                  <div className="flex items-center justify-center gap-2 bg-green-500/20 text-green-400 font-inter font-bold py-2 px-4 rounded-xl border border-green-500/30 text-sm">
+                    <CheckCircle size={18} />
+                    <span>Válido — apresente o QR Code</span>
+                  </div>
+                )}
+
+                {isUsed && (
+                  <div className="flex flex-col items-center gap-1 bg-yellow-500/20 text-sonicYellow font-inter font-bold py-2 px-4 rounded-xl border border-sonicYellow/30 text-sm text-center">
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <AlertCircle size={18} />
+                      <span>Entrada já registrada</span>
+                    </div>
+                    {ticket.used_at && (
+                      <span className="text-white/60 text-xs font-normal">
+                        em {new Date(ticket.used_at).toLocaleString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {isCancelled && (
+                  <div className="flex items-center justify-center gap-2 bg-red-500/20 text-sonicRed font-inter font-bold py-2 px-4 rounded-xl border border-sonicRed/30 text-sm">
+                    <XCircle size={18} />
+                    <span>Este exibível foi cancelado</span>
+                  </div>
                 )}
               </div>
-            )}
+            </motion.div>
 
-            {isCancelled && (
-              <div className="flex items-center justify-center gap-2 bg-red-500/20 text-sonicRed font-inter font-bold py-2 px-4 rounded-xl border border-sonicRed/30 text-sm">
-                <XCircle size={18} />
-                <span>Este exibível foi cancelado</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* FAIXA VERMELHA */}
-        <motion.div 
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ delay: 0.4 }}
-          className="bg-sonicRed px-6 py-2 mt-6 transform -skew-x-12 shadow-solid-3d-cyan border-2 border-white z-20"
-        >
-          <p className="font-inter font-black italic text-white tracking-wide text-lg transform skew-x-12">
-            VEM COMEMORAR COMIGO!
-          </p>
-        </motion.div>
+            {/* FAIXA VERMELHA */}
+            <motion.div 
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ delay: 0.4 }}
+              className="bg-sonicRed px-6 py-2 mt-6 transform -skew-x-12 shadow-solid-3d-cyan border-2 border-white z-20"
+            >
+              <p className="font-inter font-black italic text-white tracking-wide text-lg transform skew-x-12">
+                VEM COMEMORAR COMIGO!
+              </p>
+            </motion.div>
+          </>
+        )}
 
         {/* ESPAÇO PARA O ROSTO DO SONIC NO FUNDO */}
         <div className="h-[12vh] min-h-[100px] w-full shrink-0"></div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Loader2, Image as ImageIcon, MapPin, Clock, Calendar, Globe, CheckCircle2 } from "lucide-react";
+import { Save, Loader2, Image as ImageIcon, MapPin, Clock, Calendar, Globe, CheckCircle2, Copy } from "lucide-react";
 import Link from "next/link";
 
 export default function SiteConfigPage() {
@@ -19,6 +19,7 @@ export default function SiteConfigPage() {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
   
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -269,11 +270,11 @@ export default function SiteConfigPage() {
             </div>
           )}
 
-          <div className="flex gap-4 pt-4">
+          <div className="flex flex-col gap-3 pt-4">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-sonicBlueMain hover:bg-sonicBlueDark text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 text-sm shadow-md"
+              className="w-full bg-sonicBlueMain hover:bg-sonicBlueDark text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-60 text-sm shadow-md"
             >
               {loading ? (
                 <>
@@ -283,19 +284,44 @@ export default function SiteConfigPage() {
               ) : (
                 <>
                   <Save size={18} />
-                  SALVAR CONFIGURAÇÕES
+                  SALVAR
                 </>
               )}
             </button>
 
-            <Link 
-              href="/evento/demo" 
-              target="_blank" 
-              className="bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-4 px-6 rounded-xl transition-all text-sm flex items-center gap-2 shadow-md"
-            >
-              <Globe size={18} />
-              VER SITE
-            </Link>
+            <div className="flex gap-3">
+              <Link 
+                href="/evento/demo" 
+                target="_blank" 
+                className="flex-1 bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 px-4 rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-md"
+              >
+                <Globe size={18} />
+                VER SITE
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/evento/demo`;
+                  navigator.clipboard?.writeText(url).catch(() => {});
+                  setLinkCopiado(true);
+                  setTimeout(() => setLinkCopiado(false), 2000);
+                }}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition-all text-sm flex items-center justify-center gap-2"
+              >
+                {linkCopiado ? (
+                  <>
+                    <CheckCircle2 size={18} className="text-green-600" />
+                    LINK COPIADO!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={18} />
+                    COPIAR LINK
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
 

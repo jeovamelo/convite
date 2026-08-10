@@ -524,68 +524,6 @@ export default function GeradorPage() {
         
         {/* LEFT COLUMN: Properties & Configurations */}
         <div className="w-80 flex flex-col gap-6 shrink-0">
-          
-          {/* Nome do Evento (Layout Selector) */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 text-sm uppercase mb-3 flex items-center justify-between">
-              <span>Nome do Evento</span>
-            </h3>
-            {isCreatingLayout ? (
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  autoFocus
-                  placeholder="Nome do novo evento" 
-                  className="flex-1 border p-2 rounded-lg text-sm font-bold text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-sonicCyan"
-                  value={newLayoutName}
-                  onChange={e => setNewLayoutName(e.target.value)}
-                />
-                <button 
-                  onClick={async () => {
-                    if (!newLayoutName.trim()) { setIsCreatingLayout(false); return; }
-                    const newId = crypto.randomUUID();
-                    const newLayout = { id: newId, name: newLayoutName.trim() };
-                    setLayouts([...layouts, newLayout]);
-                    setSelectedLayoutId(newId);
-                    setIsCreatingLayout(false);
-                    setNewLayoutName("");
-                    setTimeout(() => {
-                      fetch("/api/settings", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id: newId, name: newLayoutName.trim() })
-                      }).then(() => loadLayouts());
-                    }, 500);
-                  }}
-                  className="bg-green-500 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-green-600 transition-colors"
-                >
-                  Criar
-                </button>
-                <button onClick={() => setIsCreatingLayout(false)} className="text-gray-400 hover:text-red-500">
-                  <XCircle size={20} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <select 
-                  value={selectedLayoutId} 
-                  onChange={e => setSelectedLayoutId(e.target.value)}
-                  className="flex-1 bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-sonicCyan focus:border-sonicCyan p-2.5 font-bold"
-                >
-                  {layouts.map(l => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
-                <button 
-                  onClick={() => setIsCreatingLayout(true)}
-                  title="Novo Evento"
-                  className="bg-sonicBlueNavy text-white p-2.5 rounded-lg text-sm font-bold hover:bg-sonicBlueMain transition-colors flex items-center justify-center shrink-0"
-                >
-                  <Plus size={18} />
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* 1. Imagem Base */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">

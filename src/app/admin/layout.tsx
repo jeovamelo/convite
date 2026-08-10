@@ -2,21 +2,42 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, QrCode, Ticket, Globe, LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { LayoutDashboard, QrCode, Ticket, Globe, LogOut, Menu, X, CalendarDays, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [eventComplete, setEventComplete] = useState(false);
+
+  // Check if event configuration is complete
+  useEffect(() => {
+    fetch("/api/site-config")
+      .then((r) => r.json())
+      .then((data) => {
+        const requiredFields = ["day", "time", "place_name", "address_line1", "address_line2"];
+        const allFilled = requiredFields.every(
+          (f) => data[f] && String(data[f]).trim().length > 0
+        );
+        setEventComplete(allFilled && data.configured !== false);
+      })
+      .catch(() => setEventComplete(false));
+  }, [pathname]); // re-check when navigating
 
   // If we are on the login page, don't render the sidebar
   if (pathname === "/admin/login") {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
-  const navItems: { name: string; path: string; icon: React.ReactNode; external?: boolean }[] = [
+  const navItems: { name: string; path: string; icon: React.ReactNode; badge?: React.ReactNode }[] = [
     { name: "Visão Geral", path: "/admin/dashboard", icon: <LayoutDashboard size={20} /> },
+    {
+      name: "Evento",
+      path: "/admin/evento",
+      icon: <CalendarDays size={20} />,
+      badge: eventComplete ? <CheckCircle2 size={16} className="text-green-400 ml-auto shrink-0" /> : null,
+    },
     { name: "Exibíveis", path: "/admin/gerador", icon: <Ticket size={20} /> },
     { name: "Recepção", path: "/admin/recepcao", icon: <QrCode size={20} /> },
     { name: "Site do Aniversário", path: "/admin/site-config", icon: <Globe size={20} /> },
@@ -40,7 +61,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link
               key={item.name}
               href={item.path}
-              target={item.external ? "_blank" : "_self"}
               onClick={() => setIsMobileMenuOpen(false)}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-inter font-bold transition-all ${
                 isActive 
@@ -50,6 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               {item.icon}
               {item.name}
+              {item.badge}
             </Link>
           );
         })}
@@ -107,3 +128,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+
