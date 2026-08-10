@@ -336,16 +336,20 @@ export default function GeradorPage() {
       formData.append("image_data_url", imagePreview);
     }
     
-    formData.append("qr_x", Math.round(qrConfig.x * scale).toString());
-    formData.append("qr_y", Math.round(qrConfig.y * scale).toString());
-    formData.append("qr_size", Math.round(qrConfig.size * scale).toString());
+    // As configurações já estão em pixels naturais da imagem-base
+    // (o Rnd multiplica por `scale` só para exibir; o servidor espera naturais).
+    // Multiplicar aqui de novo causava dupla escala: QR minúsculo/fora do
+    // lugar e texto do ID cortado na prévia e na geração em lote.
+    formData.append("qr_x", Math.round(qrConfig.x).toString());
+    formData.append("qr_y", Math.round(qrConfig.y).toString());
+    formData.append("qr_size", Math.round(qrConfig.size).toString());
 
-    formData.append("id_x", Math.round(idConfig.x * scale).toString());
-    formData.append("id_y", Math.round(idConfig.y * scale).toString());
-    formData.append("id_width", Math.round(idConfig.width * scale).toString());
-    formData.append("id_height", Math.round(idConfig.height * scale).toString());
+    formData.append("id_x", Math.round(idConfig.x).toString());
+    formData.append("id_y", Math.round(idConfig.y).toString());
+    formData.append("id_width", Math.round(idConfig.width).toString());
+    formData.append("id_height", Math.round(idConfig.height).toString());
     formData.append("id_color", idConfig.color);
-    formData.append("id_fontSize", Math.round(idConfig.fontSize * scale).toString());
+    formData.append("id_fontSize", Math.round(idConfig.fontSize).toString());
     formData.append("id_fontWeight", idConfig.fontWeight);
     
     formData.append("public_id", publicId);
