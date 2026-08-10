@@ -259,10 +259,10 @@ export default function GeradorPage() {
         body: JSON.stringify({
           id: selectedLayoutId,
           name: layouts.find(l => l.id === selectedLayoutId)?.name || "Padrão",
-          qr_x: qrConfig.x, qr_y: qrConfig.y, qr_size: qrConfig.size,
-          id_x: idConfig.x, id_y: idConfig.y, id_width: idConfig.width, id_height: idConfig.height,
-          id_color: idConfig.color, id_fontSize: idConfig.fontSize, id_fontWeight: idConfig.fontWeight,
-          quantity, peoplePerInvite
+          qr_x: Math.round(qrConfig.x), qr_y: Math.round(qrConfig.y), qr_size: Math.round(qrConfig.size),
+          id_x: Math.round(idConfig.x), id_y: Math.round(idConfig.y), id_width: Math.round(idConfig.width), id_height: Math.round(idConfig.height),
+          id_color: idConfig.color, id_fontSize: Math.round(idConfig.fontSize), id_fontWeight: idConfig.fontWeight,
+          quantity: Math.round(quantity), peoplePerInvite: Math.round(peoplePerInvite)
         })
       });
       if (!settingsRes.ok) {

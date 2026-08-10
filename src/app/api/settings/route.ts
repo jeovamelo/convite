@@ -25,7 +25,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing layout id' }, { status: 400 });
     }
 
-    const { data: updated, error } = await supabaseAdmin.from('settings').upsert(data).select().single();
+    // Sanitize integer fields to avoid float errors in Postgres
+    const integerFields = ['qr_x', 'qr_y', 'qr_size', 'id_x', 'id_y', 'id_width', 'id_height', 'id_fontSize', 'quantity', 'peoplePerInvite', 'title_size'];
+    const payload = { ...data };
+    
+    for (const field of integerFields) {
+      if (payload[field] !== undefined && payload[field] !== null) {
+        const parsed = Math.round(Number(payload[field]));
+        if (!isNaN(parsed)) {
+          payload[field] = parsed;
+        }
+      }
+    }
+
+    const { data: updated, error } = await supabaseAdmin.from('settings').upsert(payload).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
