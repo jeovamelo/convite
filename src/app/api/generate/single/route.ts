@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
     const safeIdY = Math.max(0, Math.min(Number.isFinite(id_y) ? id_y : 0, imageHeight - safeIdHeight));
     const safeFontSize = Math.max(1, Math.min(Number.isFinite(id_fontSize) ? id_fontSize : 24, safeIdHeight));
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://festa.exemplo.com";
-    const uniqueUrl = `${baseUrl}/${token}`;
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://convite.ilocseguro.com";
+    const uniqueUrl = `${baseUrl}/evento/${token}`;
 
     // 1. Generate QR Code
     const qrCodeBuffer = await QRCode.toBuffer(uniqueUrl, {

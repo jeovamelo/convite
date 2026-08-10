@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle, AlertCircle, XCircle, Loader2, Users, Calendar, Clock, MapPin } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
 
 type TicketInfo = {
@@ -30,6 +31,13 @@ export default function DynamicTicketInvitationPage() {
 
   const [loading, setLoading] = useState(true);
   const [ticket, setTicket] = useState<TicketInfo | null>(null);
+  const [ticketUrl, setTicketUrl] = useState("");
+
+  useEffect(() => {
+    // URL absoluta que vai dentro do QR Code do card
+    setTicketUrl(`${window.location.origin}/evento/${token}`);
+  }, [token]);
+
   const [config, setConfig] = useState<EventConfig>({
     day: "19/08/2026",
     time: "19 HORAS",
@@ -98,12 +106,17 @@ export default function DynamicTicketInvitationPage() {
   const isCancelled = ticket.status === "CANCELLED";
 
   return (
-    <main 
-      className="min-h-[100dvh] pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center justify-start overflow-x-hidden relative w-full bg-cover bg-center bg-fixed bg-no-repeat"
-      style={{ backgroundImage: "url('/api/bg')" }}
-    >
-      {/* Container Principal Mobile */}
-      <div className="w-full max-w-[500px] px-4 md:px-6 pt-10 flex flex-col items-center relative z-10 mx-auto">
+    <main className="min-h-[100dvh] w-full bg-gray-950 flex justify-center md:py-8 md:px-4">
+      {/* Frame mobile: tela cheia no celular, card centralizado no desktop */}
+      <div
+        className="relative w-full max-w-[480px] min-h-[100dvh] md:min-h-[90vh] md:rounded-[36px] overflow-hidden md:shadow-2xl md:border md:border-white/10 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/api/bg')" }}
+      >
+        {/* Overlay escuro suave para legibilidade dos textos */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/40 pointer-events-none" />
+
+        {/* Conteúdo */}
+        <div className="relative z-10 w-full px-4 md:px-6 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center mx-auto">
         
         {/* Espaçamento inicial para alinhar com o fundo */}
         <div className={config.title_text ? "h-[6vh] min-h-[40px] w-full shrink-0" : "h-[28vh] min-h-[180px] w-full shrink-0"}></div>
@@ -156,6 +169,13 @@ export default function DynamicTicketInvitationPage() {
                 {ticket.quantidade_pessoas === 1 ? "pessoa" : "pessoas"}
               </span>
             </div>
+
+            {/* QR Code do exibível — visível e escaneável na portaria */}
+            {!isCancelled && ticketUrl && (
+              <div className="bg-white p-3 rounded-2xl shadow-xl mb-4">
+                <QRCodeSVG value={ticketUrl} size={180} level="H" includeMargin={false} />
+              </div>
+            )}
 
             {!isUsed && !isCancelled && (
               <div className="flex items-center justify-center gap-2 bg-green-500/20 text-green-400 font-inter font-bold py-2 px-4 rounded-xl border border-green-500/30 text-sm">
@@ -284,6 +304,7 @@ export default function DynamicTicketInvitationPage() {
               </div>
             </a>
           </motion.div>
+        </div>
         </div>
       </div>
     </main>

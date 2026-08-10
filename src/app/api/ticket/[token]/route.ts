@@ -16,7 +16,8 @@ export async function GET(
 
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-  const { data: record, error } = await supabaseAdmin
+  // 1) busca pelo hash do token seguro (QR codes gerados)
+  let { data: record, error } = await supabaseAdmin
     .from("tickets")
     .select("public_id, status, quantidade_pessoas, guest_name, used_at")
     .eq("token_hash", tokenHash)
@@ -24,6 +25,20 @@ export async function GET(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // 2) fallback: permite acessar pelo código amigável (ex: /evento/LM-0001)
+  if (!record) {
+    const byPublicId = await supabaseAdmin
+      .from("tickets")
+      .select("public_id, status, quantidade_pessoas, guest_name, used_at")
+      .eq("public_id", token.toUpperCase())
+      .maybeSingle();
+
+    if (byPublicId.error) {
+      return NextResponse.json({ error: byPublicId.error.message }, { status: 500 });
+    }
+    record = byPublicId.data;
   }
 
   if (!record) {

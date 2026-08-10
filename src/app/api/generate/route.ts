@@ -74,12 +74,12 @@ export async function POST(req: NextRequest) {
       created_at: string;
       used_at: string | null;
     }> = [];
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://festa.exemplo.com";
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://convite.ilocseguro.com";
 
     for (let i = 1; i <= quantity; i++) {
       const publicId = `LM-${i.toString().padStart(4, "0")}`;
       const token = generateSecureToken();
-      const uniqueUrl = `${baseUrl}/${token}`;
+      const uniqueUrl = `${baseUrl}/evento/${token}`;
 
       // 1. Generate QR Code
       const qrCodeBuffer = await QRCode.toBuffer(uniqueUrl, {

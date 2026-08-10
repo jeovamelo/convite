@@ -782,7 +782,12 @@ export default function GeradorPage() {
                     className={`border-2 ${selectedElement === "qr" ? "border-sonicCyan z-40" : "border-transparent hover:border-gray-400 z-30"}`}
                   >
                     <div className="w-full h-full bg-white p-1 relative flex items-center justify-center">
-                      <QRCodeSVG value="https://convite.ilocseguro.com/evento/demo" size={256} className="w-full h-full" />
+                      <QRCodeSVG
+                        value="https://convite.ilocseguro.com/evento/LM-0001"
+                        size={512}
+                        level="H"
+                        style={{ width: "100%", height: "100%" }}
+                      />
                       {selectedElement === "qr" && <div className="absolute -top-6 left-0 bg-sonicCyan text-white text-[10px] font-bold px-2 py-1 rounded shadow">QR CODE</div>}
                     </div>
                   </Rnd>
