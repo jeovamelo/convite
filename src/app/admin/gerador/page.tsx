@@ -798,7 +798,8 @@ export default function GeradorPage() {
                   <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
                   <p className="text-gray-500 font-bold text-sm">Gerencie os convidados e valide as informações de acesso.</p>
                 </div>
-              {/* Limit selector */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                  {/* Limit selector */}
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs font-bold text-gray-400 uppercase">Por Página:</span>
                 <select
