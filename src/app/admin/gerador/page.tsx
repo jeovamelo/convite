@@ -986,6 +986,8 @@ export default function GeradorPage() {
             </div>
           )}
         </div>
+      )}
+        </div>
       </div>
 
       {/* Generating Overlay */}
