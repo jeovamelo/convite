@@ -33,7 +33,7 @@ export default function ScannerPage() {
 
   const loadStats = async () => {
     try {
-      const res = await fetch("/api/recepcao/stats");
+      const res = await fetch("/api/recepcao/stats?t=" + Date.now());
       const data = await res.json();
       setStats({
         presentes: data.pessoasPresentes,

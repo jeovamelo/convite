@@ -17,7 +17,7 @@ export default function RecepcaoPage() {
 
   const loadStats = async () => {
     try {
-      const res = await fetch("/api/recepcao/stats");
+      const res = await fetch("/api/recepcao/stats?t=" + Date.now());
       const data = await res.json();
       setStats(data);
     } catch(e) {

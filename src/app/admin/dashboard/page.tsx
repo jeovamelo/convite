@@ -39,7 +39,7 @@ export default function DashboardPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/recepcao/stats");
+      const res = await fetch("/api/recepcao/stats?t=" + Date.now());
       if (!res.ok) throw new Error("Falha ao carregar estatísticas.");
       const data = await res.json();
       setStats({ ...emptyStats, ...data });

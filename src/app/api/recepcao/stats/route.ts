@@ -33,6 +33,10 @@ export async function GET() {
       exibiveisCancelados,
       totalGerados,
       ultimasEntradas
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      }
     });
   } catch(e) {
     return NextResponse.json({ error: "Internal Error" }, { status: 500 });
