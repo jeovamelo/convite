@@ -984,6 +984,7 @@ export default function GeradorPage() {
                 </div>
               )}
             </div>
+          )}
         </div>
       </div>
 
