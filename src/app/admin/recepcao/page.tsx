@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Users, Ticket, CheckCircle, Camera, Clock } from "lucide-react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 type Stats = {
   convidadosPrevistos: number;
@@ -27,9 +28,23 @@ export default function RecepcaoPage() {
 
   useEffect(() => {
     loadStats();
-    // Auto refresh every 5 seconds
+    
+    // Fallback auto refresh every 5 seconds
     const interval = setInterval(loadStats, 5000);
-    return () => clearInterval(interval);
+
+    // Supabase Realtime Subscription
+    const channel = supabase
+      .channel('tickets_reception')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => {
+        console.log('Realtime update received:', payload);
+        loadStats();
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   if (!stats) return <div className="p-10 flex justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sonicBlueNavy"></div></div>;

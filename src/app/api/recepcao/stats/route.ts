@@ -2,28 +2,41 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    const { data: tickets, error } = await supabase.from('tickets').select('*');
-    if (error) throw error;
+    const { data: tickets, error } = await supabase
+      .from('tickets')
+      .select('id, public_id, status, quantidade_pessoas, guest_name, used_at')
+      .order('used_at', { ascending: false });
+
+    if (error) {
+      console.error('[STATS] Supabase error:', error);
+      throw error;
+    }
 
     const ticketsList = tickets || [];
 
-    const convidadosPrevistos = ticketsList.reduce((acc, curr) => acc + curr.quantidade_pessoas, 0);
+    // Convidados totais previstos = soma das pessoas por exibível
+    const convidadosPrevistos = ticketsList.reduce((acc, curr) => acc + (curr.quantidade_pessoas ?? 1), 0);
+
+    // Pessoas presentes = soma das pessoas nos exibíveis já utilizados
     const pessoasPresentes = ticketsList
       .filter(r => r.status === 'USED')
-      .reduce((acc, curr) => acc + curr.quantidade_pessoas, 0);
+      .reduce((acc, curr) => acc + (curr.quantidade_pessoas ?? 1), 0);
       
     const exibiveisUtilizados = ticketsList.filter(r => r.status === 'USED').length;
     const exibiveisDisponiveis = ticketsList.filter(r => r.status === 'AVAILABLE').length;
     const exibiveisCancelados = ticketsList.filter(r => r.status === 'CANCELLED').length;
     const totalGerados = ticketsList.length;
 
+    // Últimas 10 entradas (já ordenadas por used_at desc pelo Supabase)
     const ultimasEntradas = ticketsList
       .filter(r => r.status === 'USED' && r.used_at !== null)
-      .sort((a, b) => new Date(b.used_at!).getTime() - new Date(a.used_at!).getTime())
       .slice(0, 10);
+
+    console.log(`[STATS] presentes=${pessoasPresentes} | utilizados=${exibiveisUtilizados} | total=${totalGerados}`);
 
     return NextResponse.json({
       convidadosPrevistos,
@@ -35,10 +48,13 @@ export async function GET() {
       ultimasEntradas
     }, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
       }
     });
-  } catch(e) {
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+  } catch(e: any) {
+    console.error('[STATS] Internal error:', e?.message);
+    return NextResponse.json({ error: "Internal Error", detail: e?.message }, { status: 500 });
   }
 }

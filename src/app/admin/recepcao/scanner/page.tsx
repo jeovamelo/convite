@@ -102,13 +102,20 @@ export default function ScannerPage() {
 
   const processQrCode = async (url: string) => {
     try {
-      // Extract token from URL
-      // URL Format: https://festa.exemplo.com/e/TOKEN
-      const urlObj = new URL(url);
-      const parts = urlObj.pathname.split('/');
-      const token = parts[parts.length - 1];
+      let token = url.trim();
+      
+      // Try parsing as URL first
+      try {
+        const urlObj = new URL(token);
+        const parts = urlObj.pathname.split('/').filter(Boolean);
+        token = parts[parts.length - 1];
+      } catch (err) {
+        // Not a valid URL, assume it's a raw token string (e.g. "LM-0123")
+      }
 
-      if (!token) throw new Error("Invalid URL");
+      console.log('Token processado:', token);
+
+      if (!token) throw new Error("Token inválido");
 
       setScanResult({ status: 'INVALID', message: 'Validando...' });
 
@@ -123,6 +130,8 @@ export default function ScannerPage() {
       
       if (data.status === 'SUCCESS') {
         playSound('success');
+        // Recarrega stats imediatamente após check-in bem-sucedido
+        loadStats();
       } else {
         playSound('error');
       }
