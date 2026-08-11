@@ -159,7 +159,7 @@ export default function RecepcaoPage() {
             className="w-full sm:flex-1 bg-sonicBlueMain hover:bg-sonicBlueDark text-white font-black text-lg py-4 px-4 rounded-2xl shadow-[0_6px_20px_-5px_rgba(0,11,41,0.3)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95"
           >
             {copiedToast ? <Check size={22} className="text-green-300" /> : <LinkIcon size={22} />}
-            COPIAR LINK DA PORTARIA
+            LINK DA PORTARIA
           </button>
         </div>
       </div>
