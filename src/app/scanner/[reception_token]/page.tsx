@@ -337,10 +337,10 @@ export default function PublicPortariaScannerPage() {
               </div>
               
               <span className="bg-green-500 text-black font-montserrat font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest mb-3">
-                Entrada Liberada! 🟢
+                Acesso Liberado! 🟢
               </span>
               
-              <h2 className="font-montserrat font-black text-3xl text-white mb-2">
+              <h2 className="font-montserrat font-black text-3xl text-white mb-1">
                 {scanResult.public_id}
               </h2>
 
@@ -348,11 +348,9 @@ export default function PublicPortariaScannerPage() {
                 {scanResult.guest_name ? scanResult.guest_name : "Convidado Confirmado"}
               </p>
 
-              <div className="bg-white/10 border border-white/10 rounded-2xl p-4 w-full mt-4 mb-8">
-                <p className="text-white/60 text-xs font-bold uppercase mb-1">Quantidade de Pessoas</p>
-                <p className="text-4xl font-black text-white">{scanResult.quantidade_pessoas ?? 1}</p>
-                <p className="text-xs text-white/70 font-bold mt-1 uppercase">Entrada Permitida</p>
-              </div>
+              <p className="font-montserrat font-black text-lg text-white/90 mb-6">
+                (1 de {scanResult.quantidade_pessoas ?? 1} pessoas)
+              </p>
 
               <button 
                 onClick={resetScan}
@@ -365,28 +363,28 @@ export default function PublicPortariaScannerPage() {
 
           {scanResult.status === 'ALREADY_USED' && (
             <div className="w-full max-w-sm flex flex-col items-center">
-              <div className="w-24 h-24 bg-yellow-500/20 text-yellow-400 rounded-full flex items-center justify-center mb-6 border-4 border-yellow-500">
-                <AlertTriangle size={56} />
+              <div className="w-24 h-24 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mb-6 border-4 border-red-500">
+                <XCircle size={56} />
               </div>
               
-              <span className="bg-yellow-500 text-black font-montserrat font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest mb-3">
-                Já Utilizado! 🔴
+              <span className="bg-red-600 text-white font-montserrat font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest mb-3">
+                🛑 EXIBÍVEL JÁ UTILIZADO 🔴
               </span>
               
               <h2 className="font-montserrat font-black text-3xl text-white mb-2">
                 {scanResult.public_id}
               </h2>
 
-              <p className="font-inter font-bold text-lg text-yellow-200 mb-4">
+              <p className="font-inter font-bold text-lg text-red-200 mb-4">
                 {scanResult.guest_name || "Convidado"}
               </p>
 
               <div className="bg-red-500/20 border border-red-500/40 rounded-2xl p-4 w-full mb-8">
-                <p className="text-red-300 text-xs font-bold uppercase mb-1">Status</p>
-                <p className="text-sm font-bold text-white">Este exibível já deu entrada anteriormente.</p>
+                <p className="text-red-300 text-xs font-bold uppercase mb-1">Status de Entrada</p>
+                <p className="text-sm font-bold text-white">Este exibível já deu entrada na portaria.</p>
                 {scanResult.used_at && (
-                  <p className="text-xs text-red-300 mt-2 font-bold">
-                    Horário: {new Date(scanResult.used_at).toLocaleTimeString('pt-BR')}
+                  <p className="text-xs text-red-300 mt-2 font-bold uppercase">
+                    Utilizado em: {new Date(scanResult.used_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 )}
               </div>

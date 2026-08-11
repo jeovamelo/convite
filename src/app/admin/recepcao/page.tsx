@@ -92,7 +92,13 @@ export default function RecepcaoPage() {
   const handleCopyPortariaLink = () => {
     const token = receptionToken || "sec_scan_portaria";
     const fullUrl = `${window.location.origin}/scanner/${token}`;
-    navigator.clipboard?.writeText(fullUrl).catch(() => {});
+    const whatsappMessage = `📱 LINK DE ACESSO À PORTARIA - Aniversário do Luiz Maurício
+Acesse o leitor de QR Code para validação dos convidados:
+${fullUrl}
+
+⚠️ Este link é de uso exclusivo para a recepção do buffet.`;
+
+    navigator.clipboard?.writeText(whatsappMessage).catch(() => {});
     setCopiedToast(true);
     setTimeout(() => setCopiedToast(false), 4000);
   };
