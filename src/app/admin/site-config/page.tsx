@@ -42,11 +42,14 @@ export default function SiteConfigPage() {
         if (data.event_slug) {
           setConfig((prev) => ({ ...prev, event_slug: data.event_slug }));
         }
+        if (data.background_url) {
+          setImagePreview(data.background_url);
+        }
       })
       .catch(console.error);
 
-    // Set background preview
-    setImagePreview("/api/bg?t=" + new Date().getTime());
+    // Set background preview (if background_url was not set, fallback to /api/bg)
+    setImagePreview((prev) => (prev.startsWith("http") ? prev : "/api/bg?t=" + new Date().getTime()));
   }, []);
 
   // Build the public event URL using slug (friendly) or token (fallback)
@@ -94,9 +97,14 @@ export default function SiteConfigPage() {
 
         setUploadingImage(false);
         if (!imgRes.ok) throw new Error("Erro ao enviar a imagem de fundo.");
+        const imgData = await imgRes.json();
         setImageFile(null);
-        // Refresh preview
-        setImagePreview("/api/bg?t=" + Date.now());
+        // Refresh preview with public URL or fallback
+        if (imgData.url) {
+          setImagePreview(imgData.url);
+        } else {
+          setImagePreview("/api/bg?t=" + Date.now());
+        }
       }
 
       // Re-read config to get the token if it was just generated

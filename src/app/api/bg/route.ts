@@ -3,29 +3,52 @@ import fs from "fs";
 import path from "path";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
+const CONFIG_PATH = path.join(process.cwd(), ".data", "site-config.json");
+
 export async function GET() {
   try {
+    // Priority 1: Check for Supabase Storage URL in site-config.json
+    try {
+      if (fs.existsSync(CONFIG_PATH)) {
+        const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+        if (cfg.background_url && cfg.background_url.startsWith("http")) {
+          // Redirect to the Supabase Storage public URL
+          return NextResponse.redirect(cfg.background_url, { status: 302 });
+        }
+      }
+    } catch {}
+
+    // Priority 2: Check settings table for a URL (non-base64)
     const { data } = await supabaseAdmin
       .from("settings")
       .select("base_image")
       .eq("name", "Padrão (Inicial)")
-      .single();
-    if (data?.base_image?.startsWith("data:image/")) {
-      const match = data.base_image.match(/^data:(image\/[^;]+);base64,([\s\S]*)$/);
-      if (match) {
-        return new NextResponse(Buffer.from(match[2], "base64"), {
-          headers: { "Content-Type": match[1], "Cache-Control": "no-store" },
-        });
+      .maybeSingle();
+
+    if (data?.base_image) {
+      // If it's a URL, redirect
+      if (data.base_image.startsWith("http")) {
+        return NextResponse.redirect(data.base_image, { status: 302 });
+      }
+      // Legacy: if it's base64, decode and serve
+      if (data.base_image.startsWith("data:image/")) {
+        const match = data.base_image.match(/^data:(image\/[^;]+);base64,([\s\S]*)$/);
+        if (match) {
+          return new NextResponse(Buffer.from(match[2], "base64"), {
+            headers: { "Content-Type": match[1], "Cache-Control": "no-store" },
+          });
+        }
       }
     }
 
+    // Priority 3: Local file fallback
     const candidates = [
       "/app/.data/background.png",
       "/app/.data/background.jpg",
       path.join(process.cwd(), ".data", "background.png"),
       path.join(process.cwd(), ".data", "background.jpg"),
-      path.join(process.cwd(), "../..", ".data", "background.png"),
-      path.join(process.cwd(), "../..", ".data", "background.jpg"),
       path.join(process.cwd(), "public", "background.jpg"),
       path.join(process.cwd(), "public", "background.png"),
       process.env.BG_IMAGE_PATH,
@@ -39,11 +62,12 @@ export async function GET() {
       return new NextResponse(fileBuffer, {
         headers: {
           "Content-Type": contentType,
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       });
     }
 
+    // Priority 4: Default gradient SVG
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#002A7A"/><stop offset="100%" stop-color="#001A55"/></linearGradient></defs><rect width="1200" height="1600" fill="url(#g)"/><g fill="#ffffff" fill-opacity="0.09"><circle cx="150" cy="180" r="80"/><circle cx="1030" cy="320" r="120"/><circle cx="250" cy="1180" r="140"/><circle cx="980" cy="1280" r="90"/></g></svg>`;
     return new NextResponse(svg, {
       headers: {
