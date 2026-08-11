@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import jsQR from "jsqr";
-import { CheckCircle, AlertTriangle, XCircle, Volume2, VolumeX, RefreshCw, Camera, ShieldCheck, Users } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Volume2, VolumeX, RefreshCw, ShieldCheck, Users } from "lucide-react";
 
 type ScanResult = {
   status: 'SUCCESS' | 'ALREADY_USED' | 'INVALID';
@@ -37,20 +37,52 @@ export default function PublicPortariaScannerPage() {
   const loadStats = async () => {
     try {
       const res = await fetch("/api/recepcao/stats?t=" + Date.now());
-      const data = await res.json();
-      setStats({
-        presentes: data.pessoasPresentes ?? 0,
-        previstos: data.convidadosPrevistos ?? 0,
-      });
-    } catch(e) {}
+      if (res.ok) {
+        const data = await res.json();
+        let pres = data.pessoasPresentes ?? data.exibiveisUtilizados ?? 0;
+        let prev = data.convidadosPrevistos ?? data.totalGerados ?? 0;
+
+        // If API returned 0 previstos, fallback to direct client query
+        if (prev === 0) {
+          try {
+            const { supabase } = require("@/lib/supabase");
+            // Try 'tickets' table
+            const { data: ticketsData } = await supabase
+              .from('tickets')
+              .select('status, quantidade_pessoas');
+            
+            if (ticketsData && ticketsData.length > 0) {
+              prev = ticketsData.reduce((acc: number, curr: any) => acc + (curr.quantidade_pessoas ?? 1), 0);
+              pres = ticketsData
+                .filter((r: any) => r.status === 'USED')
+                .reduce((acc: number, curr: any) => acc + (curr.quantidade_pessoas ?? 1), 0);
+            } else {
+              // Try 'exibiveis' table fallback
+              const { data: exData } = await supabase
+                .from('exibiveis')
+                .select('status');
+              if (exData && exData.length > 0) {
+                prev = exData.length;
+                pres = exData.filter((r: any) => r.status === 'UTILIZADO' || r.status === 'USED').length;
+              }
+            }
+          } catch (dbErr) {
+            console.warn("[PORTARIA] Client fallback query warning:", dbErr);
+          }
+        }
+
+        setStats({ presentes: pres, previstos: prev });
+      }
+    } catch(e) {
+      console.error("[PORTARIA] Error loading stats:", e);
+    }
   };
 
-  // 1. Validate reception_token against site-config
+  // 1. Validate reception_token & set up realtime + polling
   useEffect(() => {
     fetch("/api/site-config")
       .then((r) => r.json())
       .then((data) => {
-        // If config specifies reception_token, validate against it
         if (data.reception_token) {
           if (data.reception_token === receptionToken || receptionToken === "sec_scan_portaria") {
             setTokenValid(true);
@@ -58,15 +90,44 @@ export default function PublicPortariaScannerPage() {
             setTokenValid(false);
           }
         } else {
-          // If no token stored yet, accept valid format or default
           setTokenValid(true);
         }
       })
       .catch(() => setTokenValid(true));
 
     loadStats();
-    const interval = setInterval(loadStats, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadStats, 4000);
+
+    // Realtime subscription for multi-device portaria sync
+    let channel: any = null;
+    try {
+      const { supabase } = require("@/lib/supabase");
+      if (supabase && typeof supabase.channel === "function") {
+        channel = supabase
+          .channel('public_portaria_tickets_realtime')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+            console.log('[PORTARIA] Realtime tickets update');
+            loadStats();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'exibiveis' }, () => {
+            console.log('[PORTARIA] Realtime exibiveis update');
+            loadStats();
+          })
+          .subscribe();
+      }
+    } catch (err) {
+      console.warn("[PORTARIA] Realtime subscription warning:", err);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (channel) {
+        try {
+          const { supabase } = require("@/lib/supabase");
+          supabase?.removeChannel?.(channel);
+        } catch {}
+      }
+    };
   }, [receptionToken]);
 
   const playSound = (type: 'success' | 'error') => {
@@ -154,6 +215,13 @@ export default function PublicPortariaScannerPage() {
       
       if (data.status === 'SUCCESS') {
         playSound('success');
+        // Immediate local state increment for instant visual response
+        const addedCount = data.quantidade_pessoas || 1;
+        setStats(prev => ({
+          ...prev,
+          presentes: prev.presentes + addedCount
+        }));
+        // Re-sync with backend
         loadStats();
       } else {
         playSound('error');
@@ -183,7 +251,7 @@ export default function PublicPortariaScannerPage() {
           const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
 
           if (code && code.data) {
-            scannerEnabled.current = false; // Bloqueia escaneamentos consecutivos
+            scannerEnabled.current = false;
             processQrCode(code.data);
           }
         }
@@ -263,9 +331,9 @@ export default function PublicPortariaScannerPage() {
           </div>
         </div>
 
-        {/* Counter Badge */}
-        <div className="bg-black/40 border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold text-white">
-          <Users size={12} className="text-green-400" />
+        {/* Counter Badge: Live Increment */}
+        <div className="bg-black/40 border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold text-white shadow-inner">
+          <Users size={14} className="text-green-400 animate-pulse" />
           <span>{stats.presentes} / {stats.previstos}</span>
         </div>
       </header>
