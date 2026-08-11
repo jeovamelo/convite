@@ -35,13 +35,26 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    if (!body.event_token) body.event_token = crypto.randomBytes(12).toString("hex");
     const dir = path.dirname(configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(configPath, JSON.stringify(body, null, 2));
-    return NextResponse.json({ success: true });
+
+    // Preserve existing fields (like event_token) that may not be in the payload
+    let existing: any = {};
+    try {
+      if (fs.existsSync(configPath)) {
+        existing = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      }
+    } catch {}
+
+    const merged = { ...existing, ...body };
+    if (!merged.event_token) {
+      merged.event_token = crypto.randomBytes(12).toString("hex");
+    }
+
+    fs.writeFileSync(configPath, JSON.stringify(merged, null, 2));
+    return NextResponse.json({ success: true, event_token: merged.event_token });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

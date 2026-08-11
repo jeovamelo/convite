@@ -49,7 +49,7 @@ export default function DynamicTicketInvitationPage() {
     title_size: 28,
   });
 
-  const isDemo = token === "demo" || token === "preview";
+  const [isDemo, setIsDemo] = useState(token === "demo" || token === "preview");
 
   useEffect(() => {
     // Load event site config
@@ -57,23 +57,36 @@ export default function DynamicTicketInvitationPage() {
       .then((r) => r.json())
       .then((data) => {
         if (data.day) setConfig(data);
+        // If the token matches the event_slug or event_token, treat as public site (no ticket)
+        if (
+          data.event_slug && token === data.event_slug ||
+          data.event_token && token === data.event_token
+        ) {
+          setIsDemo(true);
+          setLoading(false);
+        }
       })
       .catch(console.error);
 
     // Load ticket info (skip for demo/preview)
-    if (!token || isDemo) {
+    if (!token || token === "demo" || token === "preview") {
       setLoading(false);
       return;
     }
 
-    fetch(`/api/ticket/${encodeURIComponent(token)}`)
-      .then(async (r) => {
-        const data = await r.json();
-        setTicket(r.ok ? data : { status: "INVALID" });
-      })
-      .catch(() => setTicket({ status: "INVALID" }))
-      .finally(() => setLoading(false));
-  }, [token, isDemo]);
+    // Delay ticket fetch slightly to allow site-config to resolve slug first
+    const timer = setTimeout(() => {
+      fetch(`/api/ticket/${encodeURIComponent(token)}`)
+        .then(async (r) => {
+          const data = await r.json();
+          setTicket(r.ok ? data : { status: "INVALID" });
+        })
+        .catch(() => setTicket({ status: "INVALID" }))
+        .finally(() => setLoading(false));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [token]);
 
   if (loading) {
     return (

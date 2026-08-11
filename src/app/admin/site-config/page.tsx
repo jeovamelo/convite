@@ -14,8 +14,10 @@ export default function SiteConfigPage() {
     title_text: "",
     title_color: "#FFE800",
     title_size: 28,
+    event_slug: "",
   });
 
+  const [eventToken, setEventToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +36,22 @@ export default function SiteConfigPage() {
         if (data.day) {
           setConfig(data);
         }
+        if (data.event_token) {
+          setEventToken(data.event_token);
+        }
+        if (data.event_slug) {
+          setConfig((prev) => ({ ...prev, event_slug: data.event_slug }));
+        }
       })
       .catch(console.error);
 
     // Set background preview
     setImagePreview("/api/bg?t=" + new Date().getTime());
   }, []);
+
+  // Build the public event URL using slug (friendly) or token (fallback)
+  const publicSlug = config.event_slug?.trim() || eventToken || "demo";
+  const publicPath = `/evento/${publicSlug}`;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,7 +95,13 @@ export default function SiteConfigPage() {
         setUploadingImage(false);
         if (!imgRes.ok) throw new Error("Erro ao enviar a imagem de fundo.");
         setImageFile(null);
+        // Refresh preview
+        setImagePreview("/api/bg?t=" + Date.now());
       }
+
+      // Re-read config to get the token if it was just generated
+      const refreshed = await fetch("/api/site-config").then((r) => r.json());
+      if (refreshed.event_token) setEventToken(refreshed.event_token);
 
       setSaveStatus("Configurações salvas com sucesso!");
       setTimeout(() => setSaveStatus(null), 3000);
@@ -257,6 +275,26 @@ export default function SiteConfigPage() {
             </p>
           </div>
 
+          {/* Slug personalizado */}
+          <div className="pt-4 border-t">
+            <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+              <Globe size={16} /> Slug do Site (URL amigável)
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-400 shrink-0">convite.ilocseguro.com/evento/</span>
+              <input 
+                type="text" 
+                className="flex-1 border rounded-xl p-3 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                value={config.event_slug || ""}
+                onChange={(e) => setConfig({ ...config, event_slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                placeholder="aniversario-luiz-mauricio"
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 font-bold mt-1.5">
+              Deixe em branco para usar o token automático. Apenas letras minúsculas, números e hifens.
+            </p>
+          </div>
+
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl font-bold text-sm">
               {error}
@@ -291,7 +329,7 @@ export default function SiteConfigPage() {
 
             <div className="flex gap-3">
               <Link 
-                href="/evento/demo" 
+                href={publicPath} 
                 target="_blank" 
                 className="flex-1 bg-sonicCyan hover:bg-[#1da5cf] text-white font-bold py-3 px-4 rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-md"
               >
@@ -302,7 +340,7 @@ export default function SiteConfigPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const url = `${window.location.origin}/evento/demo`;
+                  const url = `${window.location.origin}${publicPath}`;
                   navigator.clipboard?.writeText(url).catch(() => {});
                   setLinkCopiado(true);
                   setTimeout(() => setLinkCopiado(false), 2000);
@@ -322,13 +360,21 @@ export default function SiteConfigPage() {
                 )}
               </button>
             </div>
+
+            {/* Show current public URL */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-center">
+              <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">URL Pública do Site</p>
+              <p className="text-xs text-sonicBlueMain font-bold break-all">
+                {typeof window !== 'undefined' ? `${window.location.origin}${publicPath}` : publicPath}
+              </p>
+            </div>
           </div>
         </form>
 
         {/* Visualização de Prévia */}
         <div className="bg-gray-900 rounded-3xl p-6 shadow-sm flex flex-col items-center justify-center min-h-[500px]">
           <h2 className="text-white/80 font-black text-sm uppercase mb-4 tracking-wider self-start flex items-center gap-1.5">
-            Prévia do Background
+            Prévia do Site
           </h2>
           
           <div className="relative w-full max-w-[320px] aspect-[9/16] rounded-[40px] border-[12px] border-gray-800 shadow-2xl overflow-hidden bg-cover bg-center"
