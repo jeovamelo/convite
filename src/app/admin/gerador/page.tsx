@@ -94,9 +94,21 @@ export default function GeradorPage() {
   const loadTickets = async () => {
     setLoadingTickets(true);
     try {
-      const res = await fetch("/api/tickets");
-      const data = await res.json();
-      if (data.tickets) setTickets(data.tickets);
+      let res = await fetch("/api/tickets");
+      let data = await res.json();
+      let list = data.tickets || [];
+
+      // Se os tickets existirem mas os nomes da lista (LM-0002+) estiverem vazios, executa auto-seed no banco
+      const needsSeed = list.length > 0 && list.some((t: any) => !t.guest_name && t.public_id === "LM-0002");
+      if (needsSeed) {
+        console.log("[SEED] Executando preenchimento dos 115 convidados no banco...");
+        await fetch("/api/seed-guests");
+        res = await fetch("/api/tickets");
+        data = await res.json();
+        list = data.tickets || [];
+      }
+
+      setTickets(list);
     } catch (e) {
       console.error("Erro ao carregar exibiveis", e);
     } finally {
@@ -112,15 +124,11 @@ export default function GeradorPage() {
 
   // Preenche os rascunhos de edição inline quando a lista carrega
   useEffect(() => {
-    setDrafts(prev => {
-      const next = { ...prev };
-      tickets.forEach(t => {
-        if (!next[t.id]) {
-          next[t.id] = { guest_name: t.guest_name || "", whatsapp: t.whatsapp || "" };
-        }
-      });
-      return next;
+    const next: Record<string, { guest_name: string; whatsapp: string }> = {};
+    tickets.forEach(t => {
+      next[t.id] = { guest_name: t.guest_name || "", whatsapp: t.whatsapp || "" };
     });
+    setDrafts(next);
   }, [tickets]);
 
   const saveTicketInline = async (id: string) => {
