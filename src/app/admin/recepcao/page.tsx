@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Ticket, CheckCircle, Camera, Clock, AlertTriangle } from "lucide-react";
+import { Users, Ticket, CheckCircle, Camera, Clock, AlertTriangle, Link as LinkIcon, Check, Copy } from "lucide-react";
 import Link from "next/link";
 
 type Stats = {
@@ -23,13 +23,14 @@ const EMPTY_STATS: Stats = {
 export default function RecepcaoPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [receptionToken, setReceptionToken] = useState<string | null>(null);
+  const [copiedToast, setCopiedToast] = useState(false);
 
   const loadStats = async () => {
     try {
       const res = await fetch("/api/recepcao/stats?t=" + Date.now());
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      // Normalize: ensure all fields exist with safe defaults
       setStats({
         convidadosPrevistos: data?.convidadosPrevistos ?? 0,
         pessoasPresentes: data?.pessoasPresentes ?? 0,
@@ -41,7 +42,6 @@ export default function RecepcaoPage() {
     } catch(e: any) {
       console.error("[RECEPCAO] Erro ao carregar stats:", e);
       setLoadError(e?.message || "Erro ao carregar dados");
-      // Keep existing stats if we had some, otherwise set empty
       setStats((prev) => prev ?? EMPTY_STATS);
     }
   };
@@ -49,13 +49,21 @@ export default function RecepcaoPage() {
   useEffect(() => {
     loadStats();
     
+    // Fetch site config to get reception_token
+    fetch("/api/site-config")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.reception_token) {
+          setReceptionToken(data.reception_token);
+        }
+      })
+      .catch(console.error);
+
     // Auto refresh every 5 seconds
     const interval = setInterval(loadStats, 5000);
 
-    // Supabase Realtime Subscription (wrapped in try/catch to avoid crash)
     let channel: any = null;
     try {
-      // Dynamic import to avoid crash if supabase env vars are missing
       const { supabase } = require("@/lib/supabase");
       if (supabase && typeof supabase.channel === "function") {
         channel = supabase
@@ -81,6 +89,14 @@ export default function RecepcaoPage() {
     };
   }, []);
 
+  const handleCopyPortariaLink = () => {
+    const token = receptionToken || "sec_scan_portaria";
+    const fullUrl = `${window.location.origin}/scanner/${token}`;
+    navigator.clipboard?.writeText(fullUrl).catch(() => {});
+    setCopiedToast(true);
+    setTimeout(() => setCopiedToast(false), 4000);
+  };
+
   // Loading state
   if (!stats) {
     return (
@@ -91,7 +107,7 @@ export default function RecepcaoPage() {
     );
   }
 
-  const s = stats; // shorthand with guaranteed non-null
+  const s = stats;
   const progresso = s.convidadosPrevistos > 0 
     ? Math.min(100, Math.round((s.pessoasPresentes / s.convidadosPrevistos) * 100)) 
     : 0;
@@ -99,7 +115,20 @@ export default function RecepcaoPage() {
   const entradas = Array.isArray(s.ultimasEntradas) ? s.ultimasEntradas : [];
 
   return (
-    <div className="max-w-4xl mx-auto pb-20">
+    <div className="max-w-4xl mx-auto pb-20 relative">
+
+      {/* Toast Notification */}
+      {copiedToast && (
+        <div className="fixed top-6 right-6 z-50 bg-gray-900 text-white px-5 py-4 rounded-2xl shadow-2xl border border-green-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 max-w-sm">
+          <div className="bg-green-500/20 p-2 rounded-xl text-green-400">
+            <Check size={20} />
+          </div>
+          <div>
+            <p className="font-bold text-sm text-green-400">Link da Portaria copiado!</p>
+            <p className="text-xs text-gray-300 mt-0.5">Envie este link para o recepcionista/porteiro via WhatsApp.</p>
+          </div>
+        </div>
+      )}
 
       {/* Error Banner */}
       {loadError && (
@@ -116,12 +145,23 @@ export default function RecepcaoPage() {
         <h1 className="text-4xl font-black font-montserrat italic text-sonicBlueNavy uppercase tracking-wider">Recepção</h1>
         <p className="text-gray-500 font-inter font-bold text-lg mt-1">Aniversário do Luiz Maurício</p>
         
-        <Link href="/admin/recepcao/scanner" className="block mt-6 max-w-sm mx-auto">
-          <button className="w-full bg-green-500 hover:bg-green-600 text-white font-black text-xl py-4 px-4 rounded-2xl shadow-[0_6px_20px_-5px_rgba(34,197,94,0.4)] transition-all flex items-center justify-center gap-3 uppercase tracking-wider active:scale-95">
-            <Camera size={24} />
-            INICIAR RECEPÇÃO
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-xl mx-auto">
+          <Link href="/admin/recepcao/scanner" className="w-full sm:flex-1">
+            <button className="w-full bg-green-500 hover:bg-green-600 text-white font-black text-lg py-4 px-4 rounded-2xl shadow-[0_6px_20px_-5px_rgba(34,197,94,0.4)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95">
+              <Camera size={22} />
+              INICIAR RECEPÇÃO
+            </button>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleCopyPortariaLink}
+            className="w-full sm:flex-1 bg-sonicBlueMain hover:bg-sonicBlueDark text-white font-black text-lg py-4 px-4 rounded-2xl shadow-[0_6px_20px_-5px_rgba(0,11,41,0.3)] transition-all flex items-center justify-center gap-2 uppercase tracking-wider active:scale-95"
+          >
+            {copiedToast ? <Check size={22} className="text-green-300" /> : <LinkIcon size={22} />}
+            COPIAR LINK DA PORTARIA
           </button>
-        </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
