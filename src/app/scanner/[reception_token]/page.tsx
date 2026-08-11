@@ -3,7 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import jsQR from "jsqr";
-import { CheckCircle, AlertTriangle, XCircle, Volume2, VolumeX, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle, 
+  Volume2, 
+  VolumeX, 
+  ShieldCheck, 
+  Users, 
+  BarChart3, 
+  Camera, 
+  CameraOff, 
+  ArrowLeft, 
+  Clock, 
+  UserCheck, 
+  TicketCheck 
+} from "lucide-react";
 
 type ScanResult = {
   status: 'SUCCESS' | 'ALREADY_USED' | 'INVALID';
@@ -12,6 +27,14 @@ type ScanResult = {
   guest_name?: string;
   used_at?: string;
   message?: string;
+};
+
+type FullStats = {
+  convidadosPrevistos: number;
+  pessoasPresentes: number;
+  vagasRestantes: number;
+  progresso: number;
+  ultimasEntradas: any[];
 };
 
 export default function PublicPortariaScannerPage() {
@@ -25,14 +48,21 @@ export default function PublicPortariaScannerPage() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [cameraActive, setCameraActive] = useState(true);
+  const [showResumo, setShowResumo] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   
   const streamRef = useRef<MediaStream | null>(null);
   const scannerEnabled = useRef(true);
   const requestRef = useRef<number>();
 
-  const [stats, setStats] = useState({ presentes: 0, previstos: 0 });
+  const [fullStats, setFullStats] = useState<FullStats>({
+    convidadosPrevistos: 0,
+    pessoasPresentes: 0,
+    vagasRestantes: 0,
+    progresso: 0,
+    ultimasEntradas: [],
+  });
 
   const loadStats = async () => {
     try {
@@ -41,37 +71,39 @@ export default function PublicPortariaScannerPage() {
         const data = await res.json();
         let pres = data.pessoasPresentes ?? data.exibiveisUtilizados ?? 0;
         let prev = data.convidadosPrevistos ?? data.totalGerados ?? 0;
+        let entradas = Array.isArray(data.ultimasEntradas) ? data.ultimasEntradas : [];
 
-        // If API returned 0 previstos, fallback to direct client query
+        // Fallback to client query if API returns 0
         if (prev === 0) {
           try {
             const { supabase } = require("@/lib/supabase");
-            // Try 'tickets' table
             const { data: ticketsData } = await supabase
               .from('tickets')
-              .select('status, quantidade_pessoas');
+              .select('id, public_id, status, quantidade_pessoas, guest_name, used_at')
+              .order('used_at', { ascending: false });
             
             if (ticketsData && ticketsData.length > 0) {
               prev = ticketsData.reduce((acc: number, curr: any) => acc + (curr.quantidade_pessoas ?? 1), 0);
               pres = ticketsData
                 .filter((r: any) => r.status === 'USED')
                 .reduce((acc: number, curr: any) => acc + (curr.quantidade_pessoas ?? 1), 0);
-            } else {
-              // Try 'exibiveis' table fallback
-              const { data: exData } = await supabase
-                .from('exibiveis')
-                .select('status');
-              if (exData && exData.length > 0) {
-                prev = exData.length;
-                pres = exData.filter((r: any) => r.status === 'UTILIZADO' || r.status === 'USED').length;
-              }
+              entradas = ticketsData.filter((r: any) => r.status === 'USED' && r.used_at !== null).slice(0, 10);
             }
           } catch (dbErr) {
             console.warn("[PORTARIA] Client fallback query warning:", dbErr);
           }
         }
 
-        setStats({ presentes: pres, previstos: prev });
+        const rest = Math.max(0, prev - pres);
+        const prog = prev > 0 ? Math.min(100, Number(((pres / prev) * 100).toFixed(1))) : 0;
+
+        setFullStats({
+          convidadosPrevistos: prev,
+          pessoasPresentes: pres,
+          vagasRestantes: rest,
+          progresso: prog,
+          ultimasEntradas: entradas,
+        });
       }
     } catch(e) {
       console.error("[PORTARIA] Error loading stats:", e);
@@ -98,19 +130,16 @@ export default function PublicPortariaScannerPage() {
     loadStats();
     const interval = setInterval(loadStats, 4000);
 
-    // Realtime subscription for multi-device portaria sync
     let channel: any = null;
     try {
       const { supabase } = require("@/lib/supabase");
       if (supabase && typeof supabase.channel === "function") {
         channel = supabase
-          .channel('public_portaria_tickets_realtime')
+          .channel('public_portaria_tickets_realtime_v2')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-            console.log('[PORTARIA] Realtime tickets update');
             loadStats();
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'exibiveis' }, () => {
-            console.log('[PORTARIA] Realtime exibiveis update');
             loadStats();
           })
           .subscribe();
@@ -161,16 +190,21 @@ export default function PublicPortariaScannerPage() {
     } catch(e) {}
   };
 
-  const startCamera = async (mode = facingMode) => {
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const startCamera = async () => {
     try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      stopCamera();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Câmera não suportada pelo navegador ou requer conexão HTTPS.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: mode } } 
+        video: { facingMode: { ideal: "environment" } } 
       });
       streamRef.current = stream;
       setHasPermission(true);
@@ -182,10 +216,14 @@ export default function PublicPortariaScannerPage() {
     }
   };
 
-  const toggleCamera = () => {
-    const newMode = facingMode === "environment" ? "user" : "environment";
-    setFacingMode(newMode);
-    startCamera(newMode);
+  const toggleCameraActive = () => {
+    if (cameraActive) {
+      stopCamera();
+      setCameraActive(false);
+    } else {
+      setCameraActive(true);
+      startCamera();
+    }
   };
 
   const processQrCode = async (url: string) => {
@@ -215,13 +253,13 @@ export default function PublicPortariaScannerPage() {
       
       if (data.status === 'SUCCESS') {
         playSound('success');
-        // Immediate local state increment for instant visual response
         const addedCount = data.quantidade_pessoas || 1;
-        setStats(prev => ({
-          ...prev,
-          presentes: prev.presentes + addedCount
-        }));
-        // Re-sync with backend
+        setFullStats(prev => {
+          const pres = prev.pessoasPresentes + addedCount;
+          const rest = Math.max(0, prev.convidadosPrevistos - pres);
+          const prog = prev.convidadosPrevistos > 0 ? Math.min(100, Number(((pres / prev.convidadosPrevistos) * 100).toFixed(1))) : 0;
+          return { ...prev, pessoasPresentes: pres, vagasRestantes: rest, progresso: prog };
+        });
         loadStats();
       } else {
         playSound('error');
@@ -234,7 +272,7 @@ export default function PublicPortariaScannerPage() {
   };
 
   const tick = () => {
-    if (!scannerEnabled.current) {
+    if (!scannerEnabled.current || !cameraActive) {
       requestRef.current = requestAnimationFrame(tick);
       return;
     }
@@ -261,28 +299,26 @@ export default function PublicPortariaScannerPage() {
   };
 
   useEffect(() => {
-    if (tokenValid) {
+    if (tokenValid && cameraActive) {
       startCamera();
     }
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      stopCamera();
       if (requestRef.current) {
         cancelAnimationFrame(requestRef.current);
       }
     };
-  }, [tokenValid]);
+  }, [tokenValid, cameraActive]);
 
   useEffect(() => {
-    if (hasPermission) {
+    if (hasPermission && cameraActive) {
       if (videoRef.current && streamRef.current) {
         videoRef.current.srcObject = streamRef.current;
         videoRef.current.play().catch(console.error);
       }
       requestRef.current = requestAnimationFrame(tick);
     }
-  }, [hasPermission]);
+  }, [hasPermission, cameraActive]);
 
   const resetScan = () => {
     setScanResult(null);
@@ -320,27 +356,53 @@ export default function PublicPortariaScannerPage() {
       {/* Header Fixo Mobile-First */}
       <header className="bg-gray-900/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between z-30">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="text-green-400 w-6 h-6 shrink-0" />
+          {/* Botão Resumo no Canto Superior Esquerdo */}
+          <button
+            onClick={() => setShowResumo(true)}
+            className="bg-sonicBlueMain hover:bg-sonicBlueDark text-white px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 border border-white/20 transition-all active:scale-95 shadow-md"
+          >
+            <BarChart3 size={14} className="text-green-400" />
+            <span>Resumo</span>
+          </button>
+
           <div>
-            <h1 className="font-montserrat font-black italic text-white text-sm uppercase leading-tight tracking-wider">
-              RECEPÇÃO PORTARIA
+            <h1 className="font-montserrat font-black italic text-white text-xs uppercase leading-tight tracking-wider">
+              PORTARIA
             </h1>
-            <p className="font-inter font-bold text-[10px] text-green-400 uppercase">
-              Aniversário do Luiz Maurício
+            <p className="font-inter font-bold text-[9px] text-green-400 uppercase truncate max-w-[140px] sm:max-w-none">
+              Luiz Maurício 4 Anos
             </p>
           </div>
         </div>
 
-        {/* Counter Badge: Live Increment */}
+        {/* Counter Badge */}
         <div className="bg-black/40 border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold text-white shadow-inner">
           <Users size={14} className="text-green-400 animate-pulse" />
-          <span>{stats.presentes} / {stats.previstos}</span>
+          <span>{fullStats.pessoasPresentes} / {fullStats.convidadosPrevistos}</span>
         </div>
       </header>
 
       {/* Área da Câmera */}
       <div className="flex-1 relative flex items-center justify-center bg-black">
-        {hasPermission === false ? (
+        {!cameraActive ? (
+          /* Câmera Desativada Placeholder */
+          <div className="p-6 text-center text-white max-w-sm z-20 flex flex-col items-center">
+            <div className="bg-white/10 p-6 rounded-full mb-4 border border-white/10">
+              <CameraOff className="w-12 h-12 text-red-400" />
+            </div>
+            <h2 className="font-bold text-lg mb-1">Câmera Pausada</h2>
+            <p className="text-xs text-gray-400 mb-6">
+              O leitor foi desativado para economizar bateria e recursos do dispositivo.
+            </p>
+            <button 
+              onClick={toggleCameraActive} 
+              className="bg-green-500 hover:bg-green-600 text-black font-black px-6 py-3.5 rounded-2xl uppercase text-sm flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+            >
+              <Camera size={18} />
+              RELIGAR CÂMERA
+            </button>
+          </div>
+        ) : hasPermission === false ? (
           <div className="p-6 text-center text-white max-w-sm z-20">
             <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
             <h2 className="font-bold text-lg mb-2">Câmera Indisponível</h2>
@@ -376,20 +438,36 @@ export default function PublicPortariaScannerPage() {
 
         {/* Control Floating Buttons */}
         <div className="absolute top-4 right-4 z-20 flex gap-2">
+          {/* Botão Ligar/Desligar Câmera */}
           <button 
-            onClick={toggleCamera}
-            className="p-3 bg-black/60 backdrop-blur-md rounded-full text-white/90 border border-white/20 active:scale-95 transition-transform"
-            title="Alternar Câmera"
+            onClick={toggleCameraActive}
+            className={`px-3 py-2.5 rounded-full text-xs font-bold border backdrop-blur-md flex items-center gap-1.5 active:scale-95 transition-transform ${
+              cameraActive 
+                ? "bg-green-500/20 text-green-400 border-green-500/40" 
+                : "bg-red-500/20 text-red-400 border-red-500/40"
+            }`}
+            title={cameraActive ? "Desativar Câmera" : "Ativar Câmera"}
           >
-            <RefreshCw size={20} />
+            {cameraActive ? (
+              <>
+                <Camera size={16} />
+                <span>ON</span>
+              </>
+            ) : (
+              <>
+                <CameraOff size={16} />
+                <span>OFF</span>
+              </>
+            )}
           </button>
 
+          {/* Som Toggle */}
           <button 
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-3 bg-black/60 backdrop-blur-md rounded-full text-white/90 border border-white/20 active:scale-95 transition-transform"
+            className="p-2.5 bg-black/60 backdrop-blur-md rounded-full text-white/90 border border-white/20 active:scale-95 transition-transform"
             title="Som de Validação"
           >
-            {soundEnabled ? <Volume2 size={20} className="text-green-400" /> : <VolumeX size={20} className="text-gray-400" />}
+            {soundEnabled ? <Volume2 size={16} className="text-green-400" /> : <VolumeX size={16} className="text-gray-400" />}
           </button>
         </div>
       </div>
@@ -488,6 +566,119 @@ export default function PublicPortariaScannerPage() {
               </button>
             </div>
           )}
+
+        </div>
+      )}
+
+      {/* OVERLAY DE RESUMO DO BUFFET (Modal Limpo em Overlay) */}
+      {showResumo && (
+        <div className="fixed inset-0 z-50 bg-gray-950/95 backdrop-blur-xl flex flex-col p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+          
+          {/* Top Bar Resumo */}
+          <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="text-green-400 w-6 h-6" />
+              <div>
+                <h2 className="font-montserrat font-black text-lg text-white uppercase tracking-wider leading-tight">
+                  Resumo da Portaria
+                </h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Aniversário do Luiz Maurício</p>
+              </div>
+            </div>
+
+            {/* Botão Principal de Retorno */}
+            <button
+              onClick={() => setShowResumo(false)}
+              className="bg-green-500 hover:bg-green-600 text-black font-black px-4 py-2.5 rounded-xl text-xs uppercase flex items-center gap-1.5 transition-all active:scale-95 shadow-lg"
+            >
+              <ArrowLeft size={16} />
+              <span>VOLTAR PARA A CÂMERA</span>
+            </button>
+          </div>
+
+          {/* Cards Principais */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
+              <span className="text-gray-400 font-bold text-[10px] uppercase block mb-1">Convidados Previstos</span>
+              <span className="text-3xl font-black text-white font-montserrat">{fullStats.convidadosPrevistos}</span>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4 text-center">
+              <span className="text-green-400 font-bold text-[10px] uppercase block mb-1">Pessoas Presentes</span>
+              <span className="text-3xl font-black text-green-400 font-montserrat">{fullStats.pessoasPresentes}</span>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 text-center">
+              <span className="text-yellow-400 font-bold text-[10px] uppercase block mb-1">Vagas Restantes</span>
+              <span className="text-3xl font-black text-yellow-300 font-montserrat">{fullStats.vagasRestantes}</span>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 text-center">
+              <span className="text-blue-400 font-bold text-[10px] uppercase block mb-1">Taxa de Presença</span>
+              <span className="text-3xl font-black text-blue-300 font-montserrat">{fullStats.progresso}%</span>
+            </div>
+          </div>
+
+          {/* Barra de Progresso */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+            <div className="flex justify-between items-center text-xs font-bold text-white mb-2">
+              <span>Progresso de Entrada</span>
+              <span className="text-green-400">{fullStats.pessoasPresentes} de {fullStats.convidadosPrevistos} ({fullStats.progresso}%)</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden p-0.5">
+              <div 
+                className="bg-gradient-to-r from-green-500 to-emerald-400 h-full rounded-full transition-all duration-500" 
+                style={{ width: `${fullStats.progresso}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Lista Simplificada das Últimas Entradas */}
+          <div className="flex-1">
+            <h3 className="text-xs font-bold uppercase text-gray-400 mb-3 flex items-center gap-1.5">
+              <Clock size={14} className="text-green-400" />
+              Últimas Entradas Registradas
+            </h3>
+
+            {fullStats.ultimasEntradas.length === 0 ? (
+              <div className="bg-white/5 border border-dashed border-white/10 rounded-2xl p-6 text-center text-gray-400 text-xs font-bold">
+                Nenhum exibível escaneado até o momento.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {fullStats.ultimasEntradas.map((r: any, i: number) => (
+                  <div key={r?.id ?? i} className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="bg-green-500/20 text-green-400 text-[10px] font-black px-2 py-0.5 rounded">
+                          {r?.used_at ? new Date(r.used_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                        </span>
+                        <span className="font-black text-white text-sm">{r?.public_id ?? '---'}</span>
+                      </div>
+                      <p className="text-gray-400 font-bold text-xs">
+                        {r?.guest_name || "Sem Nome Registrado"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-black text-green-400">{r?.quantidade_pessoas ?? 1}</span>
+                      <span className="text-[9px] font-bold text-gray-400 uppercase block">Pess.</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Botão de Retorno no Rodapé do Resumo */}
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setShowResumo(false)}
+              className="w-full bg-green-500 hover:bg-green-600 text-black font-black text-base py-4 rounded-2xl uppercase flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg"
+            >
+              <ArrowLeft size={18} />
+              <span>VOLTAR PARA A CÂMERA</span>
+            </button>
+          </div>
 
         </div>
       )}
