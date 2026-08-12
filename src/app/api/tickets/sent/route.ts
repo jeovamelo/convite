@@ -17,15 +17,25 @@ export async function POST(req: NextRequest) {
     const sentAt = is_sent ? new Date().toISOString() : null;
     const isSentBool = Boolean(is_sent);
 
-    // 1. Direct update on public.tickets table (primary)
+    // 1. Direct update on public.tickets table by public_id or id
     try {
-      await supabaseAdmin
+      const byPublicId = await supabaseAdmin
         .from("tickets")
         .update({
           is_sent: isSentBool,
           sent_at: sentAt
         })
-        .or(`id.eq.${ticket_id},public_id.eq.${ticket_id}`);
+        .eq("public_id", ticket_id);
+
+      if (byPublicId.error) {
+        await supabaseAdmin
+          .from("tickets")
+          .update({
+            is_sent: isSentBool,
+            sent_at: sentAt
+          })
+          .eq("id", ticket_id);
+      }
     } catch (err) {
       console.warn("[tickets/sent] Direct update on tickets table warning:", err);
     }

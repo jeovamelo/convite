@@ -35,7 +35,7 @@ export default function GeradorPage() {
   const [scaleY, setScaleY] = useState(1);
 
   // Editor State
-  const [activeTab, setActiveTab] = useState<"editor" | "lista" | "individual">("editor");
+  const [activeTab, setActiveTab] = useState<"editor" | "lista">("editor");
   const [selectedElement, setSelectedElement] = useState<"qr" | "id" | null>(null);
 
   const [qrConfig, setQrConfig] = useState({ x: 50, y: 50, size: 150 });
@@ -1144,12 +1144,6 @@ export default function GeradorPage() {
             >
               Lista de Exibíveis
             </button>
-            <button 
-              onClick={() => setActiveTab('individual')}
-              className={`font-black uppercase text-xs tracking-wider py-4 px-6 border-b-4 transition-colors ${activeTab === 'individual' ? 'border-sonicBlueMain text-sonicBlueMain' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-            >
-              Gerar Individual
-            </button>
           </div>
 
           {/* Tab Content 1: Editor */}
@@ -1611,114 +1605,7 @@ export default function GeradorPage() {
             </div>
           )}
 
-          {/* Tab Content 3: Gerar Individual */}
-          {activeTab === 'individual' && (
-            <div className="flex-1 bg-white rounded-3xl shadow-sm p-8 flex flex-col min-h-[500px]">
-              <div className="mb-6">
-                <h3 className="text-2xl font-black italic text-gray-800 uppercase">Gerar Exibível Individual</h3>
-                <p className="text-gray-500 font-bold text-sm">Busque por número do exibível e baixe exclusivamente a imagem gráfica sem alterar dados no banco.</p>
-              </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
-                {/* Lado Esquerdo: Painel de Busca e Informações do Convidado */}
-                <div className="lg:col-span-5 bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col justify-between">
-                  <div>
-                    <form onSubmit={handleSearchIndividual} className="mb-6 space-y-4">
-                      <label className="block text-xs font-bold text-gray-600 uppercase">
-                        Número do Exibível (Sufixo / Código)
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={indivInput}
-                          onChange={e => setIndivInput(e.target.value)}
-                          placeholder="Ex: 15 ou LM-0015"
-                          className="flex-1 border border-gray-300 rounded-xl p-3 font-bold text-gray-900 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
-                        />
-                        <button
-                          type="submit"
-                          disabled={indivLoading || !indivInput.trim()}
-                          className="flex items-center gap-2 bg-sonicBlueNavy hover:bg-sonicBlueMain active:scale-95 text-white font-black px-5 py-3 rounded-xl shadow-md transition-all text-sm disabled:opacity-50 cursor-pointer shrink-0"
-                        >
-                          {indivLoading ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
-                          <span>BUSCAR</span>
-                        </button>
-                      </div>
-                    </form>
-
-                    {indivError && (
-                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 font-bold text-sm rounded-xl mb-6">
-                        {indivError}
-                      </div>
-                    )}
-
-                    {indivTicket && (
-                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-3 mb-6">
-                        <div className="flex items-center justify-between border-b pb-2">
-                          <span className="text-xs font-bold text-gray-400 uppercase">ID Exibível:</span>
-                          <span className="font-mono font-black text-sonicBlueMain text-lg">{indivTicket.public_id}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-b pb-2">
-                          <span className="text-xs font-bold text-gray-400 uppercase">Convidado:</span>
-                          <span className="font-bold text-gray-800 text-sm">{indivTicket.guest_name || "Não informado"}</span>
-                        </div>
-                        <div className="flex items-center justify-between border-b pb-2">
-                          <span className="text-xs font-bold text-gray-400 uppercase">Pessoas:</span>
-                          <span className="font-bold text-gray-800 text-sm">{indivTicket.quantidade_pessoas || 1}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-gray-400 uppercase">Status de Entrada:</span>
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
-                            indivTicket.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {indivTicket.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botão de Download */}
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleDownloadIndividual}
-                      disabled={!indivPreviewUrl || indivGenerating}
-                      className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black py-4 px-6 rounded-xl shadow-lg transition-all text-sm disabled:opacity-40 cursor-pointer"
-                    >
-                      {indivGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-                      <span>BAIXAR IMAGEM GERADA</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Lado Direito: Área de Prévia Central */}
-                <div className="lg:col-span-7 bg-gray-100 p-6 rounded-2xl border border-gray-200 flex flex-col items-center justify-center min-h-[400px]">
-                  {indivGenerating ? (
-                    <div className="text-center text-gray-500">
-                      <Loader2 className="w-12 h-12 animate-spin text-sonicCyan mx-auto mb-4" />
-                      <p className="font-bold">Gerando exibível gráfico em tempo real...</p>
-                    </div>
-                  ) : indivPreviewUrl ? (
-                    <div className="flex flex-col items-center gap-4">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={indivPreviewUrl}
-                        alt="Prévia do Exibível"
-                        className="max-h-[500px] object-contain rounded-xl shadow-2xl border border-white"
-                      />
-                      <span className="text-xs font-bold text-gray-400 uppercase">Prévia em tempo real (Pronta para Download)</span>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-400">
-                      <ImageIcon size={56} className="mx-auto mb-3 opacity-40" />
-                      <p className="font-bold text-base">Digite o número do exibível para carregar a prévia gráfica.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
         </div>
