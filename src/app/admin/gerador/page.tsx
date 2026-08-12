@@ -68,6 +68,43 @@ export default function GeradorPage() {
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleSaveAllTickets = async () => {
+    setIsBatchSaving(true);
+    setToastMessage(null);
+    try {
+      const promises = tickets.map(t => {
+        const draft = drafts[t.id];
+        const guest_name = draft ? draft.guest_name : t.guest_name;
+        const whatsapp = draft ? draft.whatsapp : t.whatsapp;
+        const is_sent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
+
+        return fetch("/api/tickets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: t.id,
+            guest_name: guest_name || "",
+            whatsapp: whatsapp || "",
+            is_sent,
+            sent_status: is_sent ? "SENT" : "PENDING"
+          })
+        });
+      });
+
+      await Promise.all(promises);
+      setToastMessage("Lista de exibíveis salva com sucesso!");
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      console.error("Erro ao salvar lista em lote", e);
+      setToastMessage("Erro ao salvar alguns itens da lista.");
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setIsBatchSaving(false);
+    }
+  };
 
   // Inline editing: cada linha é editável direto na tabela, com auto-save
   // (debounce) e salvamento imediato ao sair do campo (blur).
@@ -77,11 +114,59 @@ export default function GeradorPage() {
   draftsRef.current = drafts;
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const filteredTickets = tickets.filter(t => 
-    t.public_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.guest_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.whatsapp?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTickets = tickets.filter(t => {
+    const query = searchQuery.toLowerCase();
+    const isSent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
+    const sentLabel = isSent ? "enviado" : "pendente";
+    return (
+      t.public_id?.toLowerCase().includes(query) ||
+      t.guest_name?.toLowerCase().includes(query) ||
+      t.whatsapp?.toLowerCase().includes(query) ||
+      sentLabel.includes(query)
+    );
+  });
+
+  const handleToggleSent = async (id: string, currentIsSent: boolean) => {
+    const nextState = !currentIsSent;
+    // Optimistic state update
+    setTickets(prev =>
+      prev.map(t =>
+        t.id === id
+          ? { ...t, is_sent: nextState, sent_status: nextState ? "SENT" : "PENDING" }
+          : t
+      )
+    );
+    setRowStatus(prev => ({ ...prev, [id]: "saving" }));
+
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          is_sent: nextState,
+          sent_status: nextState ? "SENT" : "PENDING"
+        })
+      });
+      if (!res.ok) throw new Error("Erro ao alterar status de envio");
+
+      setRowStatus(prev => ({ ...prev, [id]: "saved" }));
+      setTimeout(() => {
+        setRowStatus(prev => (prev[id] === "saved" ? { ...prev, [id]: undefined } : prev));
+      }, 2500);
+    } catch (e) {
+      console.error("Erro ao alterar status de envio", e);
+      // Revert optimistic update
+      setTickets(prev =>
+        prev.map(t =>
+          t.id === id
+            ? { ...t, is_sent: currentIsSent, sent_status: currentIsSent ? "SENT" : "PENDING" }
+            : t
+        )
+      );
+      setRowStatus(prev => ({ ...prev, [id]: "error" }));
+    }
+  };
   
   const totalPages = Math.max(1, Math.ceil(filteredTickets.length / itemsPerPage));
   const paginatedTickets = filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -497,7 +582,7 @@ export default function GeradorPage() {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto min-h-[calc(100vh-80px)] flex flex-col relative">
+    <div className="w-full min-h-[calc(100vh-80px)] flex flex-col relative">
       <div className="mb-6">
         <h2 className="text-3xl font-montserrat font-black italic text-sonicBlueNavy uppercase flex items-center gap-3">
           Editor Visual de Exibíveis 
@@ -530,147 +615,149 @@ export default function GeradorPage() {
 
       <div className="flex flex-col lg:flex-row gap-6 pb-10 flex-1">
         
-        {/* LEFT COLUMN: Properties & Configurations */}
-        <div className="w-80 flex flex-col gap-6 shrink-0">
+        {/* LEFT COLUMN: Properties & Configurations (Visible only in "editor" tab) */}
+        {activeTab === 'editor' && (
+          <div className="w-80 flex flex-col gap-6 shrink-0">
 
-          {/* 1. Imagem Base */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">1. Imagem Base</h3>
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-              <div className="flex flex-col items-center justify-center">
-                <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                <p className="text-xs text-gray-500 font-semibold">Carregar Arte Original</p>
-              </div>
-              <input type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={handleImageUpload} />
-            </label>
-          </div>
-
-          {/* 2. Camadas */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">2. Camadas</h3>
-            <div className="space-y-2">
-              <button 
-                onClick={() => setSelectedElement("qr")}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg font-bold text-sm transition-colors border ${selectedElement === "qr" ? "bg-sonicBlueMain/10 border-sonicBlueMain text-sonicBlueMain" : "bg-gray-50 border-transparent text-gray-600 hover:bg-gray-100"}`}
-              >
-                <QrCode size={18} /> QR Code (Preview)
-              </button>
-              <button 
-                onClick={() => setSelectedElement("id")}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg font-bold text-sm transition-colors border ${selectedElement === "id" ? "bg-sonicBlueMain/10 border-sonicBlueMain text-sonicBlueMain" : "bg-gray-50 border-transparent text-gray-600 hover:bg-gray-100"}`}
-              >
-                <Type size={18} /> ID do Exibível
-              </button>
-            </div>
-          </div>
-
-          {/* Properties */}
-          {selectedElement && (
+            {/* 1. Imagem Base */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="font-bold text-gray-800 text-sm uppercase mb-4 flex items-center gap-2">
-                <Settings2 size={16} /> 
-                Propriedades: {selectedElement === "qr" ? "QR Code" : "ID"}
-              </h3>
-              
-              {selectedElement === "qr" && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-gray-500">Pos X</label>
-                      <input type="number" value={Math.round(qrConfig.x)} onChange={(e)=>setQrConfig(p=>({...p, x: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-500">Pos Y</label>
-                      <input type="number" value={Math.round(qrConfig.y)} onChange={(e)=>setQrConfig(p=>({...p, y: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">Tamanho (1:1)</label>
-                    <input type="number" value={Math.round(qrConfig.size)} onChange={(e)=>setQrConfig(p=>({...p, size: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
-                  </div>
+              <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">1. Imagem Base</h3>
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div className="flex flex-col items-center justify-center">
+                  <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                  <p className="text-xs text-gray-500 font-semibold">Carregar Arte Original</p>
                 </div>
-              )}
-
-              {selectedElement === "id" && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">Cor do Texto</label>
-                    <input type="color" value={idConfig.color} onChange={(e)=>setIdConfig(p=>({...p, color: e.target.value}))} className="w-full h-10 cursor-pointer rounded border" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">Tamanho da Fonte</label>
-                    <input type="range" min="10" max="72" value={idConfig.fontSize} onChange={(e)=>setIdConfig(p=>({...p, fontSize: Number(e.target.value)}))} className="w-full" />
-                    <div className="text-right text-xs font-bold text-sonicBlueMain">{idConfig.fontSize}px</div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500">Peso (Weight)</label>
-                    <select value={idConfig.fontWeight} onChange={(e)=>setIdConfig(p=>({...p, fontWeight: e.target.value}))} className="w-full bg-gray-50 border rounded p-2 text-sm font-bold text-gray-900">
-                      <option value="normal">Normal</option>
-                      <option value="bold">Bold</option>
-                      <option value="900">Black / Extra Bold</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+                <input type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={handleImageUpload} />
+              </label>
             </div>
-          )}
 
-          {/* 3. Configuração do Lote */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">3. Configuração do Lote</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Quantidade</label>
-                <input type="number" min="1" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full border rounded-lg p-2 font-bold text-gray-900 bg-gray-50" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Pessoas por Exibível</label>
-                <select value={peoplePerInvite} onChange={e => setPeoplePerInvite(Number(e.target.value))} className="w-full border rounded-lg p-2 font-bold text-gray-900 bg-gray-50">
-                  <option value={1}>1 pessoa</option>
-                  <option value={2}>2 pessoas</option>
-                  <option value={3}>3 pessoas</option>
-                  <option value={4}>4 pessoas</option>
-                  <option value={5}>5 pessoas</option>
-                </select>
+            {/* 2. Camadas */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">2. Camadas</h3>
+              <div className="space-y-2">
+                <button 
+                  onClick={() => setSelectedElement("qr")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg font-bold text-sm transition-colors border ${selectedElement === "qr" ? "bg-sonicBlueMain/10 border-sonicBlueMain text-sonicBlueMain" : "bg-gray-50 border-transparent text-gray-600 hover:bg-gray-100"}`}
+                >
+                  <QrCode size={18} /> QR Code (Preview)
+                </button>
+                <button 
+                  onClick={() => setSelectedElement("id")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg font-bold text-sm transition-colors border ${selectedElement === "id" ? "bg-sonicBlueMain/10 border-sonicBlueMain text-sonicBlueMain" : "bg-gray-50 border-transparent text-gray-600 hover:bg-gray-100"}`}
+                >
+                  <Type size={18} /> ID do Exibível
+                </button>
               </div>
             </div>
+
+            {/* Properties */}
+            {selectedElement && (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-800 text-sm uppercase mb-4 flex items-center gap-2">
+                  <Settings2 size={16} /> 
+                  Propriedades: {selectedElement === "qr" ? "QR Code" : "ID"}
+                </h3>
+                
+                {selectedElement === "qr" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-gray-500">Pos X</label>
+                        <input type="number" value={Math.round(qrConfig.x)} onChange={(e)=>setQrConfig(p=>({...p, x: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-500">Pos Y</label>
+                        <input type="number" value={Math.round(qrConfig.y)} onChange={(e)=>setQrConfig(p=>({...p, y: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500">Tamanho (1:1)</label>
+                      <input type="number" value={Math.round(qrConfig.size)} onChange={(e)=>setQrConfig(p=>({...p, size: Number(e.target.value)}))} className="w-full bg-gray-50 border rounded p-2 text-sm text-gray-900" />
+                    </div>
+                  </div>
+                )}
+
+                {selectedElement === "id" && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold text-gray-500">Cor do Texto</label>
+                      <input type="color" value={idConfig.color} onChange={(e)=>setIdConfig(p=>({...p, color: e.target.value}))} className="w-full h-10 cursor-pointer rounded border" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500">Tamanho da Fonte</label>
+                      <input type="range" min="10" max="72" value={idConfig.fontSize} onChange={(e)=>setIdConfig(p=>({...p, fontSize: Number(e.target.value)}))} className="w-full" />
+                      <div className="text-right text-xs font-bold text-sonicBlueMain">{idConfig.fontSize}px</div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500">Peso (Weight)</label>
+                      <select value={idConfig.fontWeight} onChange={(e)=>setIdConfig(p=>({...p, fontWeight: e.target.value}))} className="w-full bg-gray-50 border rounded p-2 text-sm font-bold text-gray-900">
+                        <option value="normal">Normal</option>
+                        <option value="bold">Bold</option>
+                        <option value="900">Black / Extra Bold</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. Configuração do Lote */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 text-sm uppercase mb-3">3. Configuração do Lote</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Quantidade</label>
+                  <input type="number" min="1" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full border rounded-lg p-2 font-bold text-gray-900 bg-gray-50" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Pessoas por Exibível</label>
+                  <select value={peoplePerInvite} onChange={e => setPeoplePerInvite(Number(e.target.value))} className="w-full border rounded-lg p-2 font-bold text-gray-900 bg-gray-50">
+                    <option value={1}>1 pessoa</option>
+                    <option value={2}>2 pessoas</option>
+                    <option value={3}>3 pessoas</option>
+                    <option value={4}>4 pessoas</option>
+                    <option value={5}>5 pessoas</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            {/* Stack de Botões de Ação na ordem vertical solicitada */}
+            <div className="flex flex-col gap-3">
+              {/* 1. Prévia */}
+              <button 
+                onClick={handlePreview}
+                disabled={(!imageFile && !imagePreview) || isGenerating}
+                className="w-full bg-sonicCyan hover:bg-[#1da5cf] text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
+              >
+                <Eye size={20} /> PRÉVIA
+              </button>
+
+              {/* 2. Salvar */}
+              <button 
+                onClick={() => handleSaveConfig(false)}
+                disabled={isSaving}
+                className="w-full bg-sonicBlueNavy hover:bg-sonicBlueMain text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                SALVAR
+              </button>
+
+              {/* 3. Gerar */}
+              <button 
+                onClick={handleBatchGenerate}
+                disabled={isGenerating || (!imageFile && !imagePreview)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-colors shadow-md"
+              >
+                {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                GERAR
+              </button>
+            </div>
+
           </div>
-          {/* Stack de Botões de Ação na ordem vertical solicitada */}
-          <div className="flex flex-col gap-3">
-            {/* 1. Prévia */}
-            <button 
-              onClick={handlePreview}
-              disabled={(!imageFile && !imagePreview) || isGenerating}
-              className="w-full bg-sonicCyan hover:bg-[#1da5cf] text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
-            >
-              <Eye size={20} /> PRÉVIA
-            </button>
-
-            {/* 2. Salvar */}
-            <button 
-              onClick={() => handleSaveConfig(false)}
-              disabled={isSaving}
-              className="w-full bg-sonicBlueNavy hover:bg-sonicBlueMain text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-              SALVAR
-            </button>
-
-            {/* 3. Gerar */}
-            <button 
-              onClick={handleBatchGenerate}
-              disabled={isGenerating || (!imageFile && !imagePreview)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 transition-colors shadow-md"
-            >
-              {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-              GERAR
-            </button>
-          </div>
-
-        </div>
+        )}
 
         {/* RIGHT/MAIN PANEL: Tabs Navigation */}
-        <div className="flex-1 flex flex-col gap-6">
+        <div className="flex-1 flex flex-col gap-6 w-full">
           
           {/* Custom Tabs Navigation */}
           <div className="flex border-b border-gray-200 bg-white px-6 rounded-2xl shadow-sm">
@@ -815,35 +902,47 @@ export default function GeradorPage() {
                   <h3 className="text-2xl font-black italic text-gray-800 uppercase">Lista de Exibíveis Gerados</h3>
                   <p className="text-gray-500 font-bold text-sm">Digite nome e WhatsApp direto na lista — salva automaticamente.</p>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-wrap">
                   {/* Limit selector */}
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs font-bold text-gray-400 uppercase">Por Página:</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={e => setItemsPerPage(parseInt(e.target.value, 10))}
-                  className="border rounded-xl p-2 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={30}>30</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Por Página:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={e => setItemsPerPage(parseInt(e.target.value, 10))}
+                      className="border rounded-xl p-2 font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={30}>30</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
 
-              <div className="relative w-full sm:w-64 md:w-80">
-                <input 
-                  type="text" 
-                  placeholder="Buscar por ID, Nome ou Whatsapp..." 
-                  className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
+                  <div className="relative w-full sm:w-64 md:w-80">
+                    <input 
+                      type="text" 
+                      placeholder="Buscar por ID, Nome, Whatsapp ou Status..." 
+                      className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                    />
+                    <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
+                  </div>
+
+                  {/* SALVAR LISTA Button */}
+                  <button
+                    type="button"
+                    onClick={handleSaveAllTickets}
+                    disabled={isBatchSaving || loadingTickets}
+                    className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 disabled:opacity-50 cursor-pointer"
+                    title="Salvar todas as alterações da lista de exibíveis"
+                  >
+                    {isBatchSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                    <span>SALVAR LISTA</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
 
           {loadingTickets ? (
             <div className="flex-1 flex items-center justify-center py-20">
@@ -855,74 +954,102 @@ export default function GeradorPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider border-b">
-                      <th className="p-4">Exibível</th>
+                      <th className="p-4 w-32">Exibível</th>
                       <th className="p-4">Nome do Convidado</th>
-                      <th className="p-4">WhatsApp</th>
-                      <th className="p-4">Quantidade</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Salvamento</th>
+                      <th className="p-4 w-60">WhatsApp</th>
+                      <th className="p-4 w-28 text-center">Pessoas</th>
+                      <th className="p-4 w-32 text-center">Uso</th>
+                      <th className="p-4 w-40 text-center">Enviado</th>
+                      <th className="p-4 w-36 text-right">Salvamento</th>
                     </tr>
                   </thead>
                   <tbody className="font-inter text-sm text-gray-800">
                     {filteredTickets.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-gray-400 font-bold">
+                        <td colSpan={7} className="p-8 text-center text-gray-400 font-bold">
                           Nenhum exibível encontrado.
                         </td>
                       </tr>
                     ) : (
-                      paginatedTickets.map(t => (
-                        <tr key={t.id} className="hover:bg-gray-50 transition-colors border-b last:border-0">
-                          <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
-                          <td className="p-4">
-                            <input
-                              type="text"
-                              className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
-                              value={drafts[t.id]?.guest_name ?? ""}
-                              onChange={e => handleInlineChange(t.id, "guest_name", e.target.value)}
-                              onBlur={() => handleInlineBlur(t.id)}
-                              placeholder="Nome do convidado"
-                            />
-                          </td>
-                          <td className="p-4">
-                            <input
-                              type="text"
-                              className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
-                              value={drafts[t.id]?.whatsapp ?? ""}
-                              onChange={e => handleInlineChange(t.id, "whatsapp", e.target.value)}
-                              onBlur={() => handleInlineBlur(t.id)}
-                              placeholder="Ex: 85999999999"
-                            />
-                          </td>
-                          <td className="p-4 font-bold text-base">{t.quantidade_pessoas}</td>
-                          <td className="p-4">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
-                              t.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {t.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex justify-end items-center gap-2 min-w-[80px]">
-                              {rowStatus[t.id] === "saving" && (
-                                <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
-                                  <Loader2 size={14} className="animate-spin" /> Salvando
-                                </span>
-                              )}
-                              {rowStatus[t.id] === "saved" && (
-                                <span className="flex items-center gap-1 text-xs font-bold text-green-600">
-                                  <Check size={14} /> Salvo
-                                </span>
-                              )}
-                              {rowStatus[t.id] === "error" && (
-                                <span className="flex items-center gap-1 text-xs font-bold text-red-600">
-                                  <XCircle size={14} /> Erro ao salvar
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      paginatedTickets.map(t => {
+                        const isSent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
+                        return (
+                          <tr key={t.id} className="hover:bg-gray-50/80 transition-colors border-b last:border-0">
+                            <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
+                            <td className="p-4">
+                              <input
+                                type="text"
+                                className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
+                                value={drafts[t.id]?.guest_name ?? ""}
+                                onChange={e => handleInlineChange(t.id, "guest_name", e.target.value)}
+                                onBlur={() => handleInlineBlur(t.id)}
+                                placeholder="Nome do convidado"
+                              />
+                            </td>
+                            <td className="p-4">
+                              <input
+                                type="text"
+                                className="border border-gray-200 focus:border-sonicCyan p-2 rounded-lg font-bold text-gray-900 bg-white w-full text-sm focus:outline-none transition-colors"
+                                value={drafts[t.id]?.whatsapp ?? ""}
+                                onChange={e => handleInlineChange(t.id, "whatsapp", e.target.value)}
+                                onBlur={() => handleInlineBlur(t.id)}
+                                placeholder="Ex: 85999999999"
+                              />
+                            </td>
+                            <td className="p-4 font-bold text-base text-center">{t.quantidade_pessoas}</td>
+                            <td className="p-4 text-center">
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-black uppercase ${
+                                t.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                {t.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleSent(t.id, isSent)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase transition-all duration-200 cursor-pointer border select-none ${
+                                  isSent
+                                    ? "bg-emerald-100 border-emerald-300 text-emerald-800 hover:bg-emerald-200 active:scale-95 shadow-sm"
+                                    : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200 active:scale-95 shadow-sm"
+                                }`}
+                                title={isSent ? "Marcar como pendente" : "Marcar como enviado"}
+                              >
+                                {isSent ? (
+                                  <>
+                                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>✓ Enviado</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-400 shrink-0" />
+                                    <span>Pendente</span>
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex justify-end items-center gap-2 min-w-[80px]">
+                                {rowStatus[t.id] === "saving" && (
+                                  <span className="flex items-center gap-1 text-xs font-bold text-gray-400">
+                                    <Loader2 size={14} className="animate-spin" /> Salvando
+                                  </span>
+                                )}
+                                {rowStatus[t.id] === "saved" && (
+                                  <span className="flex items-center gap-1 text-xs font-bold text-green-600">
+                                    <Check size={14} /> Salvo
+                                  </span>
+                                )}
+                                {rowStatus[t.id] === "error" && (
+                                  <span className="flex items-center gap-1 text-xs font-bold text-red-600">
+                                    <XCircle size={14} /> Erro ao salvar
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -1042,6 +1169,15 @@ export default function GeradorPage() {
               ) : null}
             </div>
           </div>
+        </div>
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white font-bold px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-500/40 animate-pulse">
+          <CheckCircle className="text-emerald-400" size={22} />
+          <span className="text-sm font-black">{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-gray-400 hover:text-white">
+            <XCircle size={18} />
+          </button>
         </div>
       )}
 

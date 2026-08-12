@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, QrCode, Ticket, Globe, LogOut, Menu, X, CalendarDays, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, QrCode, Ticket, Globe, LogOut, Menu, X, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [eventComplete, setEventComplete] = useState(false);
 
   // Check if event configuration is complete
@@ -43,40 +44,68 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Site do Aniversário", path: "/admin/site-config", icon: <Globe size={20} /> },
   ];
 
-  const SidebarContent = () => (
+  const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <>
-      <div className="p-6 border-b border-white/10">
-        <h2 className="font-montserrat font-black italic text-sonicYellow text-xl uppercase leading-tight">
-          LUIZ MAURÍCIO
-        </h2>
-        <div className="bg-sonicRed text-white text-[10px] font-bold px-2 py-0.5 rounded inline-block mt-1">
-          4 ANOS
-        </div>
+      <div className={`p-4 border-b border-white/10 flex items-center justify-between min-h-[73px] ${collapsed ? "flex-col gap-2 justify-center py-4" : ""}`}>
+        {!collapsed ? (
+          <div>
+            <h2 className="font-montserrat font-black italic text-sonicYellow text-lg uppercase leading-tight">
+              LUIZ MAURÍCIO
+            </h2>
+            <div className="bg-sonicRed text-white text-[10px] font-bold px-2 py-0.5 rounded inline-block mt-0.5">
+              4 ANOS
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <span className="font-montserrat font-black italic text-sonicYellow text-sm">LM</span>
+            <span className="bg-sonicRed text-white text-[9px] font-bold px-1 rounded">4A</span>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden lg:flex items-center justify-center p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors shrink-0"
+          title={collapsed ? "Expandir Menu" : "Recolher Menu"}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
-      <nav className="flex-1 py-6 px-4 space-y-2">
+      <nav className="flex-1 py-4 px-2 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.path;
           return (
             <Link
               key={item.name}
               href={item.path}
+              title={collapsed ? item.name : undefined}
               onClick={() => setIsMobileMenuOpen(false)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-inter font-bold transition-all ${
+              className={`flex items-center gap-3 px-3 py-3 rounded-xl font-inter font-bold transition-all relative ${
+                collapsed ? "justify-center" : ""
+              } ${
                 isActive 
                   ? "bg-sonicBlueMain text-white shadow-lg shadow-sonicBlueMain/30" 
                   : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
-              {item.icon}
-              {item.name}
-              {item.badge}
+              <div className="shrink-0">{item.icon}</div>
+              {!collapsed && (
+                <>
+                  <span className="truncate text-sm">{item.name}</span>
+                  {item.badge}
+                </>
+              )}
+              {collapsed && eventComplete && item.name === "Evento" && (
+                <div className="w-2 h-2 rounded-full bg-green-400 absolute top-2 right-2" />
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-white/10">
+      <div className="p-2 border-t border-white/10">
         <button
           type="button"
           onClick={async () => {
@@ -84,10 +113,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             router.push("/admin/login");
             router.refresh();
           }}
-          className="flex items-center justify-center gap-2 w-full p-3 rounded-xl text-white/50 hover:bg-white/10 hover:text-red-400 transition-colors font-bold text-sm"
+          title={collapsed ? "Sair" : undefined}
+          className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl text-white/50 hover:bg-white/10 hover:text-red-400 transition-colors font-bold text-sm ${
+            collapsed ? "px-0" : ""
+          }`}
         >
-          <LogOut size={18} />
-          SAIR
+          <LogOut size={18} className="shrink-0" />
+          {!collapsed && <span>SAIR</span>}
         </button>
       </div>
     </>
@@ -96,8 +128,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar Desktop */}
-      <aside className="hidden lg:flex flex-col w-72 bg-sonicBlueNavy text-white h-screen sticky top-0 shadow-2xl">
-        <SidebarContent />
+      <aside className={`hidden lg:flex flex-col bg-sonicBlueNavy text-white h-screen sticky top-0 shadow-2xl transition-all duration-300 ${
+        isCollapsed ? "w-20" : "w-72"
+      }`}>
+        <SidebarContent collapsed={isCollapsed} />
       </aside>
 
       {/* Header Mobile */}
@@ -115,13 +149,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Menu Mobile Overlay */}
       {isMobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 top-16 bg-sonicBlueNavy z-40 flex flex-col">
-          <SidebarContent />
+          <SidebarContent collapsed={false} />
         </div>
       )}
 
       {/* Main Content Area */}
       <main className="flex-1 lg:pl-0 pt-16 lg:pt-0 min-w-0">
-        <div className="p-6 lg:p-10 max-w-7xl mx-auto">
+        <div className="p-4 lg:p-8 w-full max-w-[1700px] mx-auto">
           {children}
         </div>
       </main>

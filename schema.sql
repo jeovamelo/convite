@@ -7,6 +7,8 @@ create table if not exists public.tickets (
   guest_name text,
   whatsapp text,
   checked_in_by text,
+  is_sent boolean default false,
+  sent_status text default 'PENDING',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   used_at timestamp with time zone
 );

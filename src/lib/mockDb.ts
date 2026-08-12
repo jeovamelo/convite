@@ -10,7 +10,10 @@ export type InviteRecord = {
   created_at: string;
   used_at: string | null;
   guest_name?: string;
+  whatsapp?: string;
   checked_in_by?: string;
+  is_sent?: boolean;
+  sent_status?: string;
 };
 
 export type MockDBState = {
