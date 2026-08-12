@@ -6,6 +6,33 @@ import { supabaseAdmin } from "@/lib/supabase";
 const BUCKET_NAME = "event-assets";
 const CONFIG_PATH = path.join(process.cwd(), ".data", "site-config.json");
 
+/**
+ * Supabase Storage URLs are generated using the URL the server-side client
+ * was initialised with (SUPABASE_INTERNAL_URL = internal Docker hostname).
+ * Those URLs are not reachable from the browser.
+ *
+ * This helper swaps the internal host/port with the externally-accessible
+ * NEXT_PUBLIC_SUPABASE_URL so the returned URL works for browsers.
+ */
+function makeBrowserPublicUrl(internalUrl: string): string {
+  const publicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!publicSupabaseUrl || !internalUrl) return internalUrl;
+
+  try {
+    const parsed = new URL(internalUrl);
+    const target = new URL(publicSupabaseUrl);
+
+    // Replace host+port with the public-facing ones
+    parsed.hostname = target.hostname;
+    parsed.port = target.port || "";
+    parsed.protocol = target.protocol;
+
+    return parsed.toString();
+  } catch {
+    return internalUrl;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const data = await req.formData();
@@ -51,13 +78,16 @@ export async function POST(req: NextRequest) {
 
     console.log("[BG-UPLOAD] Upload successful:", uploadData?.path);
 
-    // 3. Get public URL
+    // 3. Get public URL — then rewrite internal host → external browser-accessible URL
     const { data: urlData } = supabaseAdmin.storage
       .from(BUCKET_NAME)
       .getPublicUrl(fileName);
 
-    const publicUrl = urlData?.publicUrl;
-    console.log("[BG-UPLOAD] Public URL:", publicUrl);
+    const rawPublicUrl = urlData?.publicUrl || "";
+    const publicUrl = makeBrowserPublicUrl(rawPublicUrl);
+
+    console.log("[BG-UPLOAD] Internal URL:", rawPublicUrl);
+    console.log("[BG-UPLOAD] Browser Public URL:", publicUrl);
 
     // 4. Save URL in site-config.json for persistence
     if (publicUrl) {
@@ -82,7 +112,7 @@ export async function POST(req: NextRequest) {
       fs.writeFileSync(path.join(uploadDir, "background.png"), buffer);
     } catch {}
 
-    // 6. Also save to settings table as legacy fallback (but NOT base64 — just the URL)
+    // 6. Also save to settings table (URL, not base64)
     try {
       await supabaseAdmin
         .from("settings")

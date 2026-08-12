@@ -3,21 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-// Known Supabase/PostgREST error codes when a table doesn't exist
-const TABLE_NOT_FOUND_CODES = ["42P01", "PGRST200", "PGRST204"];
-
-function isTableMissingError(error: any): boolean {
-  if (!error) return false;
-  const msg: string = (error.message || error.details || "").toLowerCase();
-  const code: string = error.code || "";
-  return (
-    TABLE_NOT_FOUND_CODES.includes(code) ||
-    msg.includes("does not exist") ||
-    msg.includes("relation") ||
-    msg.includes("ticket_sent_status")
-  );
-}
-
 // POST /api/tickets/sent
 // Body: { ticket_id: string, is_sent: boolean }
 export async function POST(req: NextRequest) {
@@ -30,37 +15,40 @@ export async function POST(req: NextRequest) {
     }
 
     const sentAt = is_sent ? new Date().toISOString() : null;
+    const isSentBool = Boolean(is_sent);
 
-    const { data, error } = await supabaseAdmin
-      .from("ticket_sent_status")
-      .upsert(
-        {
-          ticket_id,
-          is_sent: Boolean(is_sent),
-          sent_at: sentAt,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "ticket_id" }
-      )
-      .select()
-      .single();
-
-    if (error) {
-      // If the table simply doesn't exist yet, return success gracefully
-      // so the UI doesn't show "Erro ao salvar" to the user.
-      if (isTableMissingError(error)) {
-        console.warn("[tickets/sent] ticket_sent_status table not found — run the SQL migration to persist sent status.");
-        return NextResponse.json({ success: true, pending_migration: true });
-      }
-      throw error;
+    // 1. Direct update on public.tickets table (primary)
+    try {
+      await supabaseAdmin
+        .from("tickets")
+        .update({
+          is_sent: isSentBool,
+          sent_at: sentAt
+        })
+        .or(`id.eq.${ticket_id},public_id.eq.${ticket_id}`);
+    } catch (err) {
+      console.warn("[tickets/sent] Direct update on tickets table warning:", err);
     }
 
-    return NextResponse.json({ success: true, data });
+    // 2. Also upsert into ticket_sent_status table (secondary fallback)
+    try {
+      await supabaseAdmin
+        .from("ticket_sent_status")
+        .upsert(
+          {
+            ticket_id,
+            is_sent: isSentBool,
+            sent_at: sentAt,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "ticket_id" }
+        );
+    } catch (err) {
+      console.warn("[tickets/sent] Secondary table ticket_sent_status upsert warning:", err);
+    }
+
+    return NextResponse.json({ success: true, is_sent: isSentBool, sent_at: sentAt });
   } catch (error: any) {
-    if (isTableMissingError(error)) {
-      console.warn("[tickets/sent] ticket_sent_status table not found (caught).");
-      return NextResponse.json({ success: true, pending_migration: true });
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -71,25 +59,22 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const ticket_id = searchParams.get("ticket_id");
 
-    let query = supabaseAdmin.from("ticket_sent_status").select("*");
-    if (ticket_id) query = query.eq("ticket_id", ticket_id);
+    // Try tickets table
+    let query = supabaseAdmin.from("tickets").select("id, public_id, is_sent, sent_at");
+    if (ticket_id) query = query.or(`id.eq.${ticket_id},public_id.eq.${ticket_id}`);
 
     const { data, error } = await query;
-
-    if (error) {
-      // Table doesn't exist yet — return empty list gracefully
-      if (isTableMissingError(error)) {
-        console.warn("[tickets/sent GET] ticket_sent_status table not found — returning empty.");
-        return NextResponse.json({ data: [], pending_migration: true });
-      }
-      throw error;
+    if (!error && data) {
+      return NextResponse.json({ data });
     }
 
-    return NextResponse.json({ data: data || [] });
+    // Fallback: try ticket_sent_status
+    let fallbackQuery = supabaseAdmin.from("ticket_sent_status").select("*");
+    if (ticket_id) fallbackQuery = fallbackQuery.eq("ticket_id", ticket_id);
+
+    const { data: fallbackData } = await fallbackQuery;
+    return NextResponse.json({ data: fallbackData || [] });
   } catch (error: any) {
-    if (isTableMissingError(error)) {
-      return NextResponse.json({ data: [], pending_migration: true });
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

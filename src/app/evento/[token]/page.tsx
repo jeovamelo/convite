@@ -117,7 +117,7 @@ export default function DynamicTicketInvitationPage() {
       {/* Frame mobile: tela cheia no celular, card centralizado no desktop */}
       <div
         className="relative w-full max-w-[480px] min-h-[100dvh] md:min-h-[90vh] md:rounded-[36px] overflow-hidden md:shadow-2xl md:border md:border-white/10 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/api/bg')" }}
+        style={{ backgroundImage: "url('/api/bg')", backgroundColor: '#0a192f' }}
       >
         {/* Overlay escuro suave para legibilidade dos textos */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/40 pointer-events-none" />

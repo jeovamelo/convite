@@ -7,6 +7,27 @@ export const dynamic = "force-dynamic";
 
 const CONFIG_PATH = path.join(process.cwd(), ".data", "site-config.json");
 
+/**
+ * Rewrites internal Supabase Docker hostnames to the external browser-accessible URL.
+ */
+function makeBrowserPublicUrl(url: string): string {
+  const publicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!publicSupabaseUrl || !url) return url;
+  try {
+    const parsed = new URL(url);
+    const target = new URL(publicSupabaseUrl);
+    // Only rewrite if the host looks internal (not an IP that matches public already)
+    if (parsed.hostname !== target.hostname) {
+      parsed.hostname = target.hostname;
+      parsed.port = target.port || "";
+      parsed.protocol = target.protocol;
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export async function GET() {
   try {
     // Priority 1: Check for Supabase Storage URL in site-config.json
@@ -14,8 +35,9 @@ export async function GET() {
       if (fs.existsSync(CONFIG_PATH)) {
         const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
         if (cfg.background_url && cfg.background_url.startsWith("http")) {
+          const externalUrl = makeBrowserPublicUrl(cfg.background_url);
           // Redirect to the Supabase Storage public URL
-          return NextResponse.redirect(cfg.background_url, { status: 302 });
+          return NextResponse.redirect(externalUrl, { status: 302 });
         }
       }
     } catch {}
@@ -28,9 +50,9 @@ export async function GET() {
       .maybeSingle();
 
     if (data?.base_image) {
-      // If it's a URL, redirect
+      // If it's a URL, redirect (rewrite internal host to external)
       if (data.base_image.startsWith("http")) {
-        return NextResponse.redirect(data.base_image, { status: 302 });
+        return NextResponse.redirect(makeBrowserPublicUrl(data.base_image), { status: 302 });
       }
       // Legacy: if it's base64, decode and serve
       if (data.base_image.startsWith("data:image/")) {

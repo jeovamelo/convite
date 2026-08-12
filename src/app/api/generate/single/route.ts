@@ -36,10 +36,12 @@ export async function POST(req: NextRequest) {
     
     if (imageFile) {
       imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-    } else if (imageDataUrl) {
+    } else if (imageDataUrl && imageDataUrl.startsWith("data:image/")) {
       const base64Data = imageDataUrl.includes(",") ? imageDataUrl.split(",")[1] : imageDataUrl;
       imageBuffer = Buffer.from(base64Data, "base64");
-    } else if (layoutId) {
+    }
+
+    if (!imageBuffer && layoutId) {
       const { data } = await supabaseAdmin.from('settings').select('base_image').eq('id', layoutId).single();
       if (data?.base_image) {
         if (data.base_image.startsWith("/uploads/")) {
@@ -47,9 +49,54 @@ export async function POST(req: NextRequest) {
           if (fs.existsSync(filePath)) {
             imageBuffer = fs.readFileSync(filePath);
           }
-        } else {
+        } else if (data.base_image.startsWith("http://") || data.base_image.startsWith("https://")) {
+          try {
+            const imgRes = await fetch(data.base_image);
+            if (imgRes.ok) imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+          } catch {}
+        } else if (data.base_image.startsWith("data:image/")) {
           const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
           imageBuffer = Buffer.from(base64Data, 'base64');
+        }
+      }
+    }
+
+    // Fallback: Check any settings layout if imageBuffer still null
+    if (!imageBuffer) {
+      const { data: defaultSetting } = await supabaseAdmin
+        .from('settings')
+        .select('base_image')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultSetting?.base_image) {
+        if (defaultSetting.base_image.startsWith("data:image/")) {
+          const base64Data = defaultSetting.base_image.replace(/^data:image\/\w+;base64,/, "");
+          imageBuffer = Buffer.from(base64Data, 'base64');
+        } else if (defaultSetting.base_image.startsWith("http://") || defaultSetting.base_image.startsWith("https://")) {
+          try {
+            const imgRes = await fetch(defaultSetting.base_image);
+            if (imgRes.ok) imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+          } catch {}
+        }
+      }
+    }
+
+    // Fallback: Local file candidates
+    if (!imageBuffer) {
+      const candidates = [
+        "/app/.data/background.png",
+        "/app/.data/background.jpg",
+        path.join(process.cwd(), ".data", "background.png"),
+        path.join(process.cwd(), ".data", "background.jpg"),
+        path.join(process.cwd(), "public", "background.jpg"),
+        path.join(process.cwd(), "public", "background.png"),
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          imageBuffer = fs.readFileSync(p);
+          break;
         }
       }
     }

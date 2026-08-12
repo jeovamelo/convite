@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus, Printer, ChevronDown, FileSpreadsheet, FileText } from "lucide-react";
+import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus, Printer, ChevronDown, FileSpreadsheet, FileText, Filter, RefreshCw } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
 import JSZip from "jszip";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const generateSecureToken = (length = 16) => {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -32,7 +35,7 @@ export default function GeradorPage() {
   const [scaleY, setScaleY] = useState(1);
 
   // Editor State
-  const [activeTab, setActiveTab] = useState<"editor" | "lista">("editor");
+  const [activeTab, setActiveTab] = useState<"editor" | "lista" | "individual">("editor");
   const [selectedElement, setSelectedElement] = useState<"qr" | "id" | null>(null);
 
   const [qrConfig, setQrConfig] = useState({ x: 50, y: 50, size: 150 });
@@ -65,6 +68,7 @@ export default function GeradorPage() {
   // Tickets List State
   const [tickets, setTickets] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"TODOS" | "DISPONIVEL" | "UTILIZADO" | "ENVIADO" | "PENDENTE">("TODOS");
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -146,6 +150,16 @@ export default function GeradorPage() {
     const query = searchQuery.toLowerCase();
     const isSent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
     const sentLabel = isSent ? "enviado" : "pendente";
+    const isUsed = t.status === 'USED';
+
+    // Status filter
+    if (statusFilter === "DISPONIVEL" && isUsed) return false;
+    if (statusFilter === "UTILIZADO" && !isUsed) return false;
+    if (statusFilter === "ENVIADO" && !isSent) return false;
+    if (statusFilter === "PENDENTE" && isSent) return false;
+
+    // Text search
+    if (!query) return true;
     return (
       t.public_id?.toLowerCase().includes(query) ||
       t.guest_name?.toLowerCase().includes(query) ||
@@ -156,9 +170,10 @@ export default function GeradorPage() {
 
   const handleToggleSent = async (id: string, currentIsSent: boolean) => {
     const nextState = !currentIsSent;
-    // Optimistic state update — applied immediately, no rollback
+    
+    // 1. Optimistic UI update
     setTickets(prev =>
-      prev.map(t => t.id === id ? { ...t, is_sent: nextState } : t)
+      prev.map(t => (t.id === id || t.public_id === id) ? { ...t, is_sent: nextState } : t)
     );
     setRowStatus(prev => ({ ...prev, [id]: "saving" }));
 
@@ -168,42 +183,228 @@ export default function GeradorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticket_id: id, is_sent: nextState })
       });
-      // Accept 200 or any 2xx; also treat "table not found" (500) as best-effort
+
       if (res.ok) {
         setRowStatus(prev => ({ ...prev, [id]: "saved" }));
         setTimeout(() => {
           setRowStatus(prev => (prev[id] === "saved" ? { ...prev, [id]: undefined } : prev));
         }, 2000);
       } else {
-        // Best-effort: keep the toggled state but clear the saving indicator silently
-        console.warn("[handleToggleSent] API unavailable, state kept locally:", await res.text().catch(() => ''));
-        setRowStatus(prev => ({ ...prev, [id]: undefined }));
+        console.error("Erro ao salvar status de envio:", await res.text().catch(() => ''));
+        // Reverte o estado em caso de erro
+        setTickets(prev =>
+          prev.map(t => (t.id === id || t.public_id === id) ? { ...t, is_sent: currentIsSent } : t)
+        );
+        setRowStatus(prev => ({ ...prev, [id]: "error" }));
       }
     } catch (e) {
-      // Network error: same best-effort approach
-      console.warn("[handleToggleSent] Network error, state kept locally:", e);
-      setRowStatus(prev => ({ ...prev, [id]: undefined }));
+      console.error("Erro ao salvar status de envio:", e);
+      // Reverte o estado em caso de falha de conexão
+      setTickets(prev =>
+        prev.map(t => (t.id === id || t.public_id === id) ? { ...t, is_sent: currentIsSent } : t)
+      );
+      setRowStatus(prev => ({ ...prev, [id]: "error" }));
     }
+  };
+
+  // ── Regenerate Single Ticket Image (No DB mutation) ─────────────────────
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+
+  const handleRegenerateSingle = async (ticket: any) => {
+    if (!ticket || !ticket.public_id) return;
+    setRegeneratingId(ticket.public_id);
+    setToastMessage(null);
+
+    try {
+      const formData = new FormData();
+      if (imageFile) {
+        formData.append("image", imageFile);
+      } else if (imagePreview && imagePreview.startsWith("data:image/")) {
+        formData.append("image_data_url", imagePreview);
+      }
+
+      formData.append("qr_x", Math.round(qrConfig.x).toString());
+      formData.append("qr_y", Math.round(qrConfig.y).toString());
+      formData.append("qr_size", Math.round(qrConfig.size).toString());
+
+      formData.append("id_x", Math.round(idConfig.x).toString());
+      formData.append("id_y", Math.round(idConfig.y).toString());
+      formData.append("id_width", Math.round(idConfig.width).toString());
+      formData.append("id_height", Math.round(idConfig.height).toString());
+      formData.append("id_color", idConfig.color);
+      formData.append("id_fontSize", Math.round(idConfig.fontSize).toString());
+      formData.append("id_fontWeight", idConfig.fontWeight);
+
+      formData.append("public_id", ticket.public_id);
+      formData.append("token", ticket.public_id);
+      formData.append("is_preview", "true"); // CRITICAL: is_preview = "true" prevents DB insertion/update!
+      formData.append("peoplePerInvite", (ticket.quantidade_pessoas || 1).toString());
+      if (selectedLayoutId) formData.append("layout_id", selectedLayoutId);
+
+      const res = await fetch("/api/generate/single", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || `Erro ao regenerar exibível ${ticket.public_id}`);
+      }
+
+      const blob = await res.blob();
+      const fileName = `exibivel_${ticket.public_id}.png`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setToastMessage(`✓ Imagem do exibível ${ticket.public_id} regenerada e baixada!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e: any) {
+      console.error("[handleRegenerateSingle]", e);
+      alert(e.message || "Erro ao regenerar imagem do exibível.");
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  // ── GERAR INDIVIDUAL Tab State & Logic (Strict Read-Only, No DB Mutations) ──
+  const [indivInput, setIndivInput] = useState("");
+  const [indivLoading, setIndivLoading] = useState(false);
+  const [indivTicket, setIndivTicket] = useState<any | null>(null);
+  const [indivError, setIndivError] = useState<string | null>(null);
+  const [indivPreviewUrl, setIndivPreviewUrl] = useState<string | null>(null);
+  const [indivGenerating, setIndivGenerating] = useState(false);
+
+  const handleSearchIndividual = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const rawInput = indivInput.trim();
+    if (!rawInput) return;
+
+    setIndivLoading(true);
+    setIndivError(null);
+    setIndivTicket(null);
+    setIndivPreviewUrl(null);
+
+    // Formatação amigável: '15' -> 'LM-0015', '0015' -> 'LM-0015', 'LM-0015' -> 'LM-0015'
+    let clean = rawInput.toUpperCase();
+    if (!clean.startsWith("LM-")) {
+      const numOnly = clean.replace(/\D/g, "");
+      if (numOnly) {
+        clean = "LM-" + numOnly.padStart(4, "0");
+      }
+    }
+
+    try {
+      // 1. Consulta somente leitura na API de exibíveis
+      const res = await fetch("/api/tickets");
+      if (!res.ok) throw new Error("Erro ao consultar a lista de exibíveis.");
+
+      const data = await res.json();
+      const allTickets: any[] = data.tickets || [];
+      const found = allTickets.find(
+        t => t.public_id === clean || t.public_id === rawInput.toUpperCase() || t.id === rawInput
+      );
+
+      if (!found) {
+        throw new Error(`Exibível '${clean}' não foi encontrado no banco de dados do evento.`);
+      }
+
+      setIndivTicket(found);
+
+      // 2. Compilação da imagem gráfica com is_preview = true (sem alterar o banco)
+      setIndivGenerating(true);
+      const formData = new FormData();
+      if (imageFile) {
+        formData.append("image", imageFile);
+      } else if (imagePreview && imagePreview.startsWith("data:image/")) {
+        formData.append("image_data_url", imagePreview);
+      }
+
+      formData.append("qr_x", Math.round(qrConfig.x).toString());
+      formData.append("qr_y", Math.round(qrConfig.y).toString());
+      formData.append("qr_size", Math.round(qrConfig.size).toString());
+
+      formData.append("id_x", Math.round(idConfig.x).toString());
+      formData.append("id_y", Math.round(idConfig.y).toString());
+      formData.append("id_width", Math.round(idConfig.width).toString());
+      formData.append("id_height", Math.round(idConfig.height).toString());
+      formData.append("id_color", idConfig.color);
+      formData.append("id_fontSize", Math.round(idConfig.fontSize).toString());
+      formData.append("id_fontWeight", idConfig.fontWeight);
+
+      formData.append("public_id", found.public_id);
+      formData.append("token", found.public_id);
+      formData.append("is_preview", "true"); // MODO LEITURA ESTRITO: NUNCA FAZ INSERT/UPDATE
+      formData.append("peoplePerInvite", (found.quantidade_pessoas || 1).toString());
+      if (selectedLayoutId) formData.append("layout_id", selectedLayoutId);
+
+      const genRes = await fetch("/api/generate/single", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!genRes.ok) {
+        throw new Error("Falha ao compilar a imagem do exibível.");
+      }
+
+      const blob = await genRes.blob();
+      setIndivPreviewUrl(URL.createObjectURL(blob));
+    } catch (err: any) {
+      setIndivError(err.message || "Erro ao localizar o exibível.");
+    } finally {
+      setIndivLoading(false);
+      setIndivGenerating(false);
+    }
+  };
+
+  const handleDownloadIndividual = () => {
+    if (!indivPreviewUrl || !indivTicket) return;
+    const a = document.createElement("a");
+    a.href = indivPreviewUrl;
+    a.download = `exibivel_${indivTicket.public_id}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
   
   const totalPages = Math.max(1, Math.ceil(filteredTickets.length / itemsPerPage));
   const paginatedTickets = filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // ── Export helpers ──────────────────────────────────────────────────────
+  // Helper: returns the data source for exports (filtered if filter active, otherwise all)
+  const getExportData = () => {
+    const hasFilter = searchQuery.trim() !== '' || statusFilter !== 'TODOS';
+    return hasFilter ? filteredTickets : tickets;
+  };
+
+  const mapTicketRow = (t: any) => {
+    const isSent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
+    return {
+      "ID Exibível": t.public_id || "",
+      "Nome do Convidado": t.guest_name || "",
+      "WhatsApp": t.whatsapp || "",
+      "Pessoas": t.quantidade_pessoas ?? 1,
+      "Status Uso": t.status === 'USED' ? "Utilizado" : "Disponível",
+      "Enviado": isSent ? "✓ Enviado" : "Pendente"
+    };
+  };
+
   const exportToCSV = () => {
+    const data = getExportData();
     const header = ["ID Exibível", "Nome do Convidado", "WhatsApp", "Pessoas", "Status Uso", "Enviado"];
-    const rows = tickets.map(t => [
-      t.public_id || "",
-      t.guest_name || "",
-      t.whatsapp || "",
-      t.quantidade_pessoas ?? 1,
-      t.is_used ? "Utilizado" : "Disponível",
-      Boolean(t.is_sent) ? "Enviado" : "Pendente"
-    ]);
+    const rows = data.map(t => {
+      const row = mapTicketRow(t);
+      return header.map(h => row[h as keyof typeof row]);
+    });
     const csvContent = [header, ...rows]
-      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")
-      ).join("\n");
-    // BOM for Excel UTF-8 detection
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -214,67 +415,90 @@ export default function GeradorPage() {
     setExportMenuOpen(false);
   };
 
-  const exportToPDF = async () => {
+  const exportToExcel = () => {
+    const data = getExportData().map(mapTicketRow);
+    const ws = XLSX.utils.json_to_sheet(data);
+    // Column widths
+    ws['!cols'] = [
+      { wch: 14 }, // ID Exibível
+      { wch: 30 }, // Nome do Convidado
+      { wch: 18 }, // WhatsApp
+      { wch: 10 }, // Pessoas
+      { wch: 14 }, // Status Uso
+      { wch: 14 }, // Enviado
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Exibíveis");
+    XLSX.writeFile(wb, `exibiveis-${new Date().toISOString().slice(0,10)}.xlsx`);
+    setExportMenuOpen(false);
+  };
+
+  const buildPDF = (forPrint = false) => {
+    const data = getExportData();
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('LISTA DE EXIBÍVEIS — Aniversário do Luiz Maurício', 14, 16);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    const filterLabel = (searchQuery.trim() || statusFilter !== 'TODOS') ? ' (filtrado)' : '';
+    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}  |  Total: ${data.length} exibíveis${filterLabel}`, 14, 22);
+    autoTable(doc, {
+      startY: 26,
+      theme: 'grid',
+      head: [["ID Exibível", "Nome do Convidado", "WhatsApp", "Pessoas", "Status Uso", "Enviado"]],
+      body: data.map(t => {
+        const row = mapTicketRow(t);
+        return [row["ID Exibível"], row["Nome do Convidado"], row["WhatsApp"], row["Pessoas"], row["Status Uso"], row["Enviado"]];
+      }),
+      styles: { fontSize: 8.5, cellPadding: 2 },
+      headStyles: { fillColor: [10, 25, 47], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      columnStyles: {
+        0: { cellWidth: 24 }, // ID Exibível
+        1: { cellWidth: 'auto' }, // Nome do Convidado (Flexível)
+        2: { cellWidth: 32 }, // WhatsApp
+        3: { cellWidth: 16, halign: 'center' }, // Pessoas
+        4: { cellWidth: 24, halign: 'center' }, // Status Uso
+        5: { cellWidth: 22, halign: 'center' }  // Enviado
+      }
+    });
+    return doc;
+  };
+
+  const exportToPDF = () => {
     setExportMenuOpen(false);
     try {
-      // Dynamically load jsPDF from CDN
-      if (!(window as any).jspdf) {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error('jsPDF failed to load'));
-          document.head.appendChild(s);
-        });
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error('autotable failed to load'));
-          document.head.appendChild(s);
-        });
-      }
-      const { jsPDF } = (window as any).jspdf;
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text('LISTA DE EXIBÍVEIS — Aniversário do Luiz Maurício', 14, 16);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}  |  Total: ${tickets.length} exibíveis`, 14, 23);
-      (doc as any).autoTable({
-        startY: 28,
-        head: [["ID Exibível", "Nome do Convidado", "WhatsApp", "Pessoas", "Status Uso", "Enviado"]],
-        body: tickets.map(t => [
-          t.public_id || "",
-          t.guest_name || "",
-          t.whatsapp || "",
-          t.quantidade_pessoas ?? 1,
-          t.is_used ? "Utilizado" : "Disponível",
-          Boolean(t.is_sent) ? "✓ Enviado" : "Pendente"
-        ]),
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [10, 46, 100], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [245, 247, 250] },
-        columnStyles: {
-          0: { cellWidth: 28 },
-          3: { halign: 'center', cellWidth: 18 },
-          4: { halign: 'center', cellWidth: 26 },
-          5: { halign: 'center', cellWidth: 24 }
-        }
-      });
+      const doc = buildPDF();
       doc.save(`exibiveis-${new Date().toISOString().slice(0,10)}.pdf`);
     } catch (e: any) {
       alert('Erro ao gerar PDF: ' + e.message);
     }
   };
 
-  const handlePrint = () => { window.print(); };
+  const handlePrint = () => {
+    try {
+      const doc = buildPDF(true);
+      // Open PDF in new tab for native print dialog
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.addEventListener('load', () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 300);
+        });
+      }
+    } catch (e: any) {
+      alert('Erro ao gerar PDF para impressão: ' + e.message);
+    }
+  };
 
   // Reset page to 1 when search or limit changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, itemsPerPage]);
+  }, [searchQuery, itemsPerPage, statusFilter]);
 
   const loadTickets = async () => {
     setLoadingTickets(true);
@@ -920,6 +1144,12 @@ export default function GeradorPage() {
             >
               Lista de Exibíveis
             </button>
+            <button 
+              onClick={() => setActiveTab('individual')}
+              className={`font-black uppercase text-xs tracking-wider py-4 px-6 border-b-4 transition-colors ${activeTab === 'individual' ? 'border-sonicBlueMain text-sonicBlueMain' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              Gerar Individual
+            </button>
           </div>
 
           {/* Tab Content 1: Editor */}
@@ -1069,13 +1299,27 @@ export default function GeradorPage() {
                   <div className="relative w-full sm:w-64 md:w-80">
                     <input 
                       type="text" 
-                      placeholder="Buscar por ID, Nome, Whatsapp ou Status..." 
+                      placeholder="Buscar por ID, Nome ou WhatsApp..." 
                       className="w-full pl-10 pr-4 py-2.5 border rounded-xl font-bold text-gray-900 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                     />
                     <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
                   </div>
+
+                  {/* Single ID Quick Regenerate Button */}
+                  {filteredTickets.length === 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateSingle(filteredTickets[0])}
+                      disabled={regeneratingId === filteredTickets[0].public_id}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black px-4 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 disabled:opacity-50 cursor-pointer no-print"
+                      title={`Regenerar e baixar imagem do exibível ${filteredTickets[0].public_id}`}
+                    >
+                      {regeneratingId === filteredTickets[0].public_id ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
+                      <span>REGENERAR {filteredTickets[0].public_id}</span>
+                    </button>
+                  )}
 
                   {/* ── EXPORT Dropdown ── */}
                   <div className="relative shrink-0 no-print" ref={exportMenuRef}>
@@ -1089,20 +1333,27 @@ export default function GeradorPage() {
                       <ChevronDown size={14} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {exportMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[230px]">
+                      <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[260px]">
                         <button
-                          onClick={exportToCSV}
+                          onClick={exportToExcel}
                           className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <FileSpreadsheet size={18} className="text-green-600" />
-                          Exportar para Excel (.csv)
+                          📊 Exportar para Excel (.xlsx)
+                        </button>
+                        <button
+                          onClick={exportToCSV}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                        >
+                          <FileText size={18} className="text-blue-500" />
+                          📄 Exportar para CSV (.csv)
                         </button>
                         <button
                           onClick={exportToPDF}
                           className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                         >
                           <FileText size={18} className="text-red-500" />
-                          Exportar para PDF (.pdf)
+                          📑 Exportar para PDF (.pdf)
                         </button>
                       </div>
                     )}
@@ -1113,7 +1364,7 @@ export default function GeradorPage() {
                     type="button"
                     onClick={handlePrint}
                     className="flex items-center gap-2 bg-gray-700 hover:bg-gray-800 text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 no-print"
-                    title="Imprimir lista de exibíveis"
+                    title="Gerar PDF e abrir diálogo de impressão"
                   >
                     <Printer size={18} />
                     <span>IMPRIMIR</span>
@@ -1131,6 +1382,42 @@ export default function GeradorPage() {
                     <span>SALVAR LISTA</span>
                   </button>
                 </div>
+              </div>
+
+              {/* ── Status Filter Pills ── */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap no-print">
+                <Filter size={16} className="text-gray-400" />
+                <span className="text-xs font-bold text-gray-400 uppercase mr-1">Status:</span>
+                {(["TODOS", "DISPONIVEL", "UTILIZADO", "ENVIADO", "PENDENTE"] as const).map(s => {
+                  const isActive = statusFilter === s;
+                  const labels: Record<string, string> = {
+                    TODOS: "Todos",
+                    DISPONIVEL: "Disponível",
+                    UTILIZADO: "Utilizado",
+                    ENVIADO: "Enviado",
+                    PENDENTE: "Pendente"
+                  };
+                  const colors: Record<string, string> = {
+                    TODOS: isActive ? "bg-sonicBlueMain text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                    DISPONIVEL: isActive ? "bg-green-500 text-white shadow-md" : "bg-green-50 text-green-700 hover:bg-green-100",
+                    UTILIZADO: isActive ? "bg-red-500 text-white shadow-md" : "bg-red-50 text-red-700 hover:bg-red-100",
+                    ENVIADO: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                    PENDENTE: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 hover:bg-amber-100",
+                  };
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStatusFilter(s)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-black uppercase transition-all duration-200 cursor-pointer border-0 select-none active:scale-95 ${colors[s]}`}
+                    >
+                      {labels[s]}
+                      {isActive && s !== "TODOS" && (
+                        <span className="ml-1.5 opacity-80">({filteredTickets.length})</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
           {/* Print-only header */}
@@ -1155,19 +1442,21 @@ export default function GeradorPage() {
                       <th className="p-4 w-28 text-center">Pessoas</th>
                       <th className="p-4 w-32 text-center">Uso</th>
                       <th className="p-4 w-40 text-center">Enviado</th>
+                      <th className="p-4 w-44 text-center">Imagem</th>
                       <th className="p-4 w-36 text-right">Salvamento</th>
                     </tr>
                   </thead>
                   <tbody className="font-inter text-sm text-gray-800">
                     {filteredTickets.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-gray-400 font-bold">
+                        <td colSpan={8} className="p-8 text-center text-gray-400 font-bold">
                           Nenhum exibível encontrado.
                         </td>
                       </tr>
                     ) : (
                       paginatedTickets.map(t => {
                         const isSent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
+                        const isRegenerating = regeneratingId === t.public_id;
                         return (
                           <tr key={t.id} className="hover:bg-gray-50/80 transition-colors border-b last:border-0">
                             <td className="p-4 font-mono font-black text-sonicBlueMain text-base">{t.public_id}</td>
@@ -1221,6 +1510,22 @@ export default function GeradorPage() {
                                     <span>Pendente</span>
                                   </>
                                 )}
+                              </button>
+                            </td>
+                            <td className="p-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRegenerateSingle(t)}
+                                disabled={isRegenerating}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sonicBlueNavy hover:bg-sonicBlueMain text-white rounded-xl text-xs font-black uppercase transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer no-print"
+                                title={`Regenerar e baixar imagem do exibível ${t.public_id}`}
+                              >
+                                {isRegenerating ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <RefreshCw size={14} />
+                                )}
+                                <span>Regenerar</span>
                               </button>
                             </td>
                             <td className="p-4 text-right">
@@ -1303,6 +1608,115 @@ export default function GeradorPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Tab Content 3: Gerar Individual */}
+          {activeTab === 'individual' && (
+            <div className="flex-1 bg-white rounded-3xl shadow-sm p-8 flex flex-col min-h-[500px]">
+              <div className="mb-6">
+                <h3 className="text-2xl font-black italic text-gray-800 uppercase">Gerar Exibível Individual</h3>
+                <p className="text-gray-500 font-bold text-sm">Busque por número do exibível e baixe exclusivamente a imagem gráfica sem alterar dados no banco.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
+                {/* Lado Esquerdo: Painel de Busca e Informações do Convidado */}
+                <div className="lg:col-span-5 bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col justify-between">
+                  <div>
+                    <form onSubmit={handleSearchIndividual} className="mb-6 space-y-4">
+                      <label className="block text-xs font-bold text-gray-600 uppercase">
+                        Número do Exibível (Sufixo / Código)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={indivInput}
+                          onChange={e => setIndivInput(e.target.value)}
+                          placeholder="Ex: 15 ou LM-0015"
+                          className="flex-1 border border-gray-300 rounded-xl p-3 font-bold text-gray-900 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-sonicCyan"
+                        />
+                        <button
+                          type="submit"
+                          disabled={indivLoading || !indivInput.trim()}
+                          className="flex items-center gap-2 bg-sonicBlueNavy hover:bg-sonicBlueMain active:scale-95 text-white font-black px-5 py-3 rounded-xl shadow-md transition-all text-sm disabled:opacity-50 cursor-pointer shrink-0"
+                        >
+                          {indivLoading ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
+                          <span>BUSCAR</span>
+                        </button>
+                      </div>
+                    </form>
+
+                    {indivError && (
+                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 font-bold text-sm rounded-xl mb-6">
+                        {indivError}
+                      </div>
+                    )}
+
+                    {indivTicket && (
+                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-3 mb-6">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-gray-400 uppercase">ID Exibível:</span>
+                          <span className="font-mono font-black text-sonicBlueMain text-lg">{indivTicket.public_id}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-gray-400 uppercase">Convidado:</span>
+                          <span className="font-bold text-gray-800 text-sm">{indivTicket.guest_name || "Não informado"}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="text-xs font-bold text-gray-400 uppercase">Pessoas:</span>
+                          <span className="font-bold text-gray-800 text-sm">{indivTicket.quantidade_pessoas || 1}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-400 uppercase">Status de Entrada:</span>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase ${
+                            indivTicket.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {indivTicket.status === 'AVAILABLE' ? 'Disponível' : 'Utilizado'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Botão de Download */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadIndividual}
+                      disabled={!indivPreviewUrl || indivGenerating}
+                      className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black py-4 px-6 rounded-xl shadow-lg transition-all text-sm disabled:opacity-40 cursor-pointer"
+                    >
+                      {indivGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                      <span>BAIXAR IMAGEM GERADA</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Lado Direito: Área de Prévia Central */}
+                <div className="lg:col-span-7 bg-gray-100 p-6 rounded-2xl border border-gray-200 flex flex-col items-center justify-center min-h-[400px]">
+                  {indivGenerating ? (
+                    <div className="text-center text-gray-500">
+                      <Loader2 className="w-12 h-12 animate-spin text-sonicCyan mx-auto mb-4" />
+                      <p className="font-bold">Gerando exibível gráfico em tempo real...</p>
+                    </div>
+                  ) : indivPreviewUrl ? (
+                    <div className="flex flex-col items-center gap-4">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={indivPreviewUrl}
+                        alt="Prévia do Exibível"
+                        className="max-h-[500px] object-contain rounded-xl shadow-2xl border border-white"
+                      />
+                      <span className="text-xs font-bold text-gray-400 uppercase">Prévia em tempo real (Pronta para Download)</span>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-400">
+                      <ImageIcon size={56} className="mx-auto mb-3 opacity-40" />
+                      <p className="font-bold text-base">Digite o número do exibível para carregar a prévia gráfica.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
