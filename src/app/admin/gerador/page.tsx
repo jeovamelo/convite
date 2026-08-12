@@ -196,7 +196,7 @@ export default function GeradorPage() {
       t.public_id || "",
       t.guest_name || "",
       t.whatsapp || "",
-      t.people_per_invite ?? 1,
+      t.quantidade_pessoas ?? 1,
       t.is_used ? "Utilizado" : "Disponível",
       Boolean(t.is_sent) ? "Enviado" : "Pendente"
     ]);
@@ -249,7 +249,7 @@ export default function GeradorPage() {
           t.public_id || "",
           t.guest_name || "",
           t.whatsapp || "",
-          t.people_per_invite ?? 1,
+          t.quantidade_pessoas ?? 1,
           t.is_used ? "Utilizado" : "Disponível",
           Boolean(t.is_sent) ? "✓ Enviado" : "Pendente"
         ]),

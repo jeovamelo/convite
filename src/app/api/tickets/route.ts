@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('tickets')
-      .select('*')
+      .select('id, public_id, guest_name, whatsapp, quantidade_pessoas, status, token_hash')
       .order('public_id', { ascending: true });
 
     if (error) throw error;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       .from('tickets')
       .update(payload)
       .eq('id', id)
-      .select('id, public_id, guest_name, whatsapp, status, people_per_invite')
+      .select('id, public_id, guest_name, whatsapp, status, quantidade_pessoas, token_hash')
       .single();
 
     if (error) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
           .from('tickets')
           .update(payload)
           .eq('id', id)
-          .select('id, public_id, guest_name, whatsapp, status, people_per_invite')
+          .select('id, public_id, guest_name, whatsapp, status, quantidade_pessoas, token_hash')
           .single();
         if (retry.error) throw retry.error;
         return NextResponse.json({ success: true, ticket: retry.data });
