@@ -42,14 +42,10 @@ export default function SiteConfigPage() {
         if (data.event_slug) {
           setConfig((prev) => ({ ...prev, event_slug: data.event_slug }));
         }
-        if (data.background_url) {
-          setImagePreview(data.background_url);
-        }
+        // Always use /api/bg as proxy (handles CORS, redirects, and Docker internal URLs)
+        setImagePreview("/api/bg?t=" + Date.now());
       })
       .catch(console.error);
-
-    // Set background preview (if background_url was not set, fallback to /api/bg)
-    setImagePreview((prev) => (prev.startsWith("http") ? prev : "/api/bg?t=" + new Date().getTime()));
   }, []);
 
   // Build the public event URL using slug (friendly) or token (fallback)

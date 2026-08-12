@@ -7,6 +7,10 @@ import { resolveImageUrl } from "@/lib/imageUrl";
 const BUCKET_NAME = "event-assets";
 const CONFIG_PATH = path.join(process.cwd(), ".data", "site-config.json");
 
+// Raise the default 1 MB body-size limit so large background images can be uploaded
+export const dynamic = "force-dynamic";
+export const maxDuration = 60; // seconds
+
 export async function POST(req: NextRequest) {
   try {
     const data = await req.formData();

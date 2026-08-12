@@ -8,6 +8,30 @@ export const dynamic = "force-dynamic";
 
 const CONFIG_PATH = path.join(process.cwd(), ".data", "site-config.json");
 
+/**
+ * Fetches a remote image and returns it as a proxied response.
+ * This avoids 302 redirect issues with CSS backgroundImage and CORS.
+ */
+async function proxyImage(url: string): Promise<Response | null> {
+  try {
+    const resolved = resolveImageUrl(url);
+    const upstream = await fetch(resolved, { cache: "no-store" });
+    if (!upstream.ok) return null;
+
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const contentType = upstream.headers.get("content-type") || "image/jpeg";
+
+    return new NextResponse(buffer, {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   try {
     // Priority 1: Check for Supabase Storage URL in site-config.json
@@ -15,9 +39,8 @@ export async function GET() {
       if (fs.existsSync(CONFIG_PATH)) {
         const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
         if (cfg.background_url && cfg.background_url.startsWith("http")) {
-          const externalUrl = resolveImageUrl(cfg.background_url);
-          // Redirect to the Supabase Storage public URL
-          return NextResponse.redirect(externalUrl, { status: 302 });
+          const proxied = await proxyImage(cfg.background_url);
+          if (proxied) return proxied;
         }
       }
     } catch {}
@@ -30,9 +53,10 @@ export async function GET() {
       .maybeSingle();
 
     if (data?.base_image) {
-      // If it's a URL, redirect (rewrite internal host to external)
+      // If it's a URL, proxy it
       if (data.base_image.startsWith("http")) {
-        return NextResponse.redirect(resolveImageUrl(data.base_image), { status: 302 });
+        const proxied = await proxyImage(data.base_image);
+        if (proxied) return proxied;
       }
       // Legacy: if it's base64, decode and serve
       if (data.base_image.startsWith("data:image/")) {
