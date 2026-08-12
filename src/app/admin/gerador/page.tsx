@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus, Printer, ChevronDown, FileSpreadsheet, FileText, Filter, RefreshCw } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
@@ -21,6 +21,8 @@ const generateSecureToken = (length = 16) => {
 export default function GeradorPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isArtLoading, setIsArtLoading] = useState(false);
+  const [artLoadError, setArtLoadError] = useState<string | null>(null);
   
   const [naturalWidth, setNaturalWidth] = useState(1);
   const [naturalHeight, setNaturalHeight] = useState(1);
@@ -167,6 +169,22 @@ export default function GeradorPage() {
       sentLabel.includes(query)
     );
   });
+
+  // Counts per status (across all tickets in real-time)
+  const statusCounts = useMemo(() => {
+    const total = tickets.length;
+    const disponivel = tickets.filter(t => t.status === 'AVAILABLE').length;
+    const utilizado = tickets.filter(t => t.status === 'USED' || t.status === 'UTILIZADO').length;
+    const enviado = tickets.filter(t => Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO')).length;
+    const pendente = total - enviado;
+    return {
+      TODOS: total,
+      DISPONIVEL: disponivel,
+      UTILIZADO: utilizado,
+      ENVIADO: enviado,
+      PENDENTE: pendente
+    };
+  }, [tickets]);
 
   const handleToggleSent = async (id: string, currentIsSent: boolean) => {
     const nextState = !currentIsSent;
@@ -574,6 +592,8 @@ export default function GeradorPage() {
     // Reset image preview when changing layout
     setImageFile(null);
     setImagePreview(null);
+    setIsArtLoading(false);
+    setArtLoadError(null);
     
     fetch(`/api/settings?layout_id=${selectedLayoutId}`)
       .then(r => r.json())
@@ -596,6 +616,8 @@ export default function GeradorPage() {
       .then(r => r.json())
       .then(data => {
         if (data.image) {
+          setIsArtLoading(true);
+          setArtLoadError(null);
           setImagePreview(data.image);
         }
       }).catch(console.error);
@@ -709,7 +731,14 @@ export default function GeradorPage() {
   };
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setIsArtLoading(false);
+    setArtLoadError(null);
     recalcScale(e.currentTarget);
+  };
+
+  const handleImageError = () => {
+    setIsArtLoading(false);
+    setArtLoadError("Não foi possível carregar a arte original. Verifique sua conexão e tente novamente.");
   };
 
   // ResizeObserver on the img itself to handle window/panel resize.
@@ -1089,10 +1118,36 @@ export default function GeradorPage() {
                     ref={imgRef}
                     src={imagePreview}
                     alt="Canvas"
+                    crossOrigin="anonymous"
                     className="max-w-full max-h-[700px] block pointer-events-none select-none"
                     onLoad={handleImageLoad}
+                    onError={handleImageError}
                   />
-                  
+
+                  {isArtLoading && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-200/90 rounded">
+                      <Loader2 size={40} className="animate-spin text-sonicBlueMain mb-3" />
+                      <p className="font-bold text-gray-600 text-sm">Carregando arte original...</p>
+                    </div>
+                  )}
+
+                  {artLoadError && !isArtLoading && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-200/95 rounded p-6 text-center">
+                      <p className="font-bold text-red-600 text-sm mb-3">{artLoadError}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsArtLoading(true);
+                          setArtLoadError(null);
+                          setImagePreview((prev) => prev ? prev.split("?")[0] + "?t=" + Date.now() : prev);
+                        }}
+                        className="bg-sonicBlueMain hover:bg-sonicBlueDark text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors"
+                      >
+                        Tentar novamente
+                      </button>
+                    </div>
+                  )}
+
                   {/* QR Code RND Component */}
                   <Rnd
                     size={{ width: qrConfig.size / scale, height: qrConfig.size / scaleY }}
@@ -1304,31 +1359,44 @@ export default function GeradorPage() {
                 <span className="text-xs font-bold text-gray-400 uppercase mr-1">Status:</span>
                 {(["TODOS", "DISPONIVEL", "UTILIZADO", "ENVIADO", "PENDENTE"] as const).map(s => {
                   const isActive = statusFilter === s;
+                  const count = statusCounts[s];
                   const labels: Record<string, string> = {
-                    TODOS: "Todos",
-                    DISPONIVEL: "Disponível",
-                    UTILIZADO: "Utilizado",
-                    ENVIADO: "Enviado",
-                    PENDENTE: "Pendente"
+                    TODOS: "TODOS",
+                    DISPONIVEL: "DISPONÍVEL",
+                    UTILIZADO: "UTILIZADO",
+                    ENVIADO: "ENVIADO",
+                    PENDENTE: "PENDENTE"
                   };
-                  const colors: Record<string, string> = {
-                    TODOS: isActive ? "bg-sonicBlueMain text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-                    DISPONIVEL: isActive ? "bg-green-500 text-white shadow-md" : "bg-green-50 text-green-700 hover:bg-green-100",
-                    UTILIZADO: isActive ? "bg-red-500 text-white shadow-md" : "bg-red-50 text-red-700 hover:bg-red-100",
-                    ENVIADO: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
-                    PENDENTE: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 hover:bg-amber-100",
+                  const activeColors: Record<string, string> = {
+                    TODOS: "bg-sonicBlueNavy text-white shadow-md ring-2 ring-sonicBlueNavy/40",
+                    DISPONIVEL: "bg-green-600 text-white shadow-md ring-2 ring-green-600/40",
+                    UTILIZADO: "bg-red-600 text-white shadow-md ring-2 ring-red-600/40",
+                    ENVIADO: "bg-emerald-600 text-white shadow-md ring-2 ring-emerald-600/40",
+                    PENDENTE: "bg-amber-600 text-white shadow-md ring-2 ring-amber-600/40",
                   };
+                  const inactiveColors: Record<string, string> = {
+                    TODOS: "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200",
+                    DISPONIVEL: "bg-green-50 text-green-800 hover:bg-green-100 border border-green-200/60",
+                    UTILIZADO: "bg-red-50 text-red-800 hover:bg-red-100 border border-red-200/60",
+                    ENVIADO: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60",
+                    PENDENTE: "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200/60",
+                  };
+
                   return (
                     <button
                       key={s}
                       type="button"
                       onClick={() => setStatusFilter(s)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-black uppercase transition-all duration-200 cursor-pointer border-0 select-none active:scale-95 ${colors[s]}`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-black uppercase transition-all duration-200 cursor-pointer select-none active:scale-95 flex items-center gap-1.5 ${
+                        isActive ? activeColors[s] : inactiveColors[s]
+                      }`}
                     >
-                      {labels[s]}
-                      {isActive && s !== "TODOS" && (
-                        <span className="ml-1.5 opacity-80">({filteredTickets.length})</span>
-                      )}
+                      <span>{labels[s]}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-black ${
+                        isActive ? "bg-white/25 text-white" : "bg-black/10 text-gray-700"
+                      }`}>
+                        ({count})
+                      </span>
                     </button>
                   );
                 })}

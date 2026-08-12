@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import fs from "fs";
-import path from "path";
+import { resolveImageUrl } from "@/lib/imageUrl";
+
+const BUCKET_NAME = "event-assets";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (data?.base_image) {
-    return NextResponse.json({ image: data.base_image });
+    return NextResponse.json({ image: resolveImageUrl(data.base_image) });
   }
   return NextResponse.json({ image: null });
 }
@@ -26,40 +27,63 @@ export async function POST(req: NextRequest) {
     const data = await req.formData();
     const file = data.get("image") as File;
     const layoutId = data.get("layout_id") as string;
-    
+
     if (!layoutId) {
       return NextResponse.json({ error: 'Missing layout id' }, { status: 400 });
     }
-
-    let relativeUrl = null;
-    if (file) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
-      
-      // Ensure directory exists
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      const fileName = `${layoutId}.png`;
-      const filePath = path.join(uploadDir, fileName);
-      
-      // Write file
-      fs.writeFileSync(filePath, buffer);
-      relativeUrl = `/uploads/${fileName}`;
+    if (!file) {
+      return NextResponse.json({ error: 'Missing image file' }, { status: 400 });
     }
-    
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const ext = file.name?.split('.').pop()?.toLowerCase() || 'png';
+    const contentType = file.type || (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png');
+    const fileName = `layouts/${layoutId}.${ext}`;
+
+    // Ensure bucket exists (create if needed)
+    try {
+      const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+      const exists = buckets?.some((b: any) => b.name === BUCKET_NAME);
+      if (!exists) {
+        await supabaseAdmin.storage.createBucket(BUCKET_NAME, { public: true });
+      }
+    } catch (bucketErr: any) {
+      console.warn("[LAYOUT-UPLOAD] Bucket check/create warning:", bucketErr?.message);
+    }
+
+    // Upload to Supabase Storage (persists across deploys)
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, buffer, {
+        contentType,
+        upsert: true,
+        cacheControl: "3600",
+      });
+
+    if (uploadError) {
+      console.error("[LAYOUT-UPLOAD] Storage upload error:", uploadError);
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    // Store the browser-reachable public URL, never the internal Docker host
+    const publicUrl = resolveImageUrl(urlData?.publicUrl || "");
+
     const { error } = await supabaseAdmin
       .from('settings')
-      .update({ base_image: relativeUrl })
+      .update({ base_image: publicUrl })
       .eq('id', layoutId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    
-    return NextResponse.json({ success: true, image: relativeUrl });
+
+    return NextResponse.json({ success: true, image: publicUrl });
   } catch (error: any) {
+    console.error("[LAYOUT-UPLOAD] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

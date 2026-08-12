@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { resolveImageUrl } from "@/lib/imageUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,10 @@ export async function GET() {
 
       if (updated) {
         fs.writeFileSync(configPath, JSON.stringify(saved, null, 2));
+      }
+
+      if (saved.background_url) {
+        saved.background_url = resolveImageUrl(saved.background_url);
       }
 
       return NextResponse.json({ configured: true, ...saved });

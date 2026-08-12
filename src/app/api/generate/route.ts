@@ -5,6 +5,7 @@ import sharp from "sharp";
 import JSZip from "jszip";
 import jsQR from "jsqr";
 import { supabaseAdmin } from "@/lib/supabase";
+import { resolveImageUrl } from "@/lib/imageUrl";
 import fs from "fs";
 import path from "path";
 
@@ -53,6 +54,11 @@ export async function POST(req: NextRequest) {
           if (fs.existsSync(filePath)) {
             baseImageBuffer = fs.readFileSync(filePath);
           }
+        } else if (data.base_image.startsWith("http://") || data.base_image.startsWith("https://")) {
+          try {
+            const imgRes = await fetch(resolveImageUrl(data.base_image));
+            if (imgRes.ok) baseImageBuffer = Buffer.from(await imgRes.arrayBuffer());
+          } catch {}
         } else {
           const base64Data = data.base_image.replace(/^data:image\/\w+;base64,/, "");
           baseImageBuffer = Buffer.from(base64Data, 'base64');

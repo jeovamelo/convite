@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 import jsQR from "jsqr";
 import { supabaseAdmin } from "@/lib/supabase";
+import { resolveImageUrl } from "@/lib/imageUrl";
 import fs from "fs";
 import path from "path";
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
           }
         } else if (data.base_image.startsWith("http://") || data.base_image.startsWith("https://")) {
           try {
-            const imgRes = await fetch(data.base_image);
+            const imgRes = await fetch(resolveImageUrl(data.base_image));
             if (imgRes.ok) imageBuffer = Buffer.from(await imgRes.arrayBuffer());
           } catch {}
         } else if (data.base_image.startsWith("data:image/")) {
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
           imageBuffer = Buffer.from(base64Data, 'base64');
         } else if (defaultSetting.base_image.startsWith("http://") || defaultSetting.base_image.startsWith("https://")) {
           try {
-            const imgRes = await fetch(defaultSetting.base_image);
+            const imgRes = await fetch(resolveImageUrl(defaultSetting.base_image));
             if (imgRes.ok) imageBuffer = Buffer.from(await imgRes.arrayBuffer());
           } catch {}
         }
