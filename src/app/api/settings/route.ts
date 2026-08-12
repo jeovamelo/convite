@@ -38,9 +38,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: updated, error } = await supabaseAdmin.from('settings').upsert(payload).select().single();
-    if (error) throw error;
-    return NextResponse.json({ success: true, data: updated });
+    // Check if setting row exists for this ID
+    const { data: existing } = await supabaseAdmin.from('settings').select('id, name').eq('id', id).maybeSingle();
+
+    if (existing) {
+      // If row exists and payload name is a generic fallback, keep existing name
+      if (payload.name === "Padrão" && existing.name && existing.name !== "Padrão") {
+        payload.name = existing.name;
+      }
+
+      let { data: updated, error } = await supabaseAdmin
+        .from('settings')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error && error.message?.includes('settings_name_key')) {
+        delete payload.name;
+        const retry = await supabaseAdmin
+          .from('settings')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (!retry.error) {
+          updated = retry.data;
+          error = null;
+        }
+      }
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, data: updated });
+    } else {
+      // If inserting a new layout, ensure name is not duplicate
+      const { data: created, error } = await supabaseAdmin
+        .from('settings')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, data: created });
+    }
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

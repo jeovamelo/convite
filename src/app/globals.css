@@ -50,3 +50,121 @@ input[type=number]::-webkit-outer-spin-button {
     color: #111827; /* gray-900 */
   }
 }
+
+/* ── @media print: Layout de Impressão da Lista de Exibíveis ── */
+@media print {
+  /* Ocultar toda UI que não é conteúdo da lista */
+  .no-print,
+  nav,
+  aside,
+  header,
+  [data-sidebar],
+  [class*="sidebar"],
+  [class*="Sidebar"] {
+    display: none !important;
+  }
+
+  /* Reset de margem e padding da página */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 10pt;
+    background: white !important;
+    color: #000 !important;
+  }
+
+  /* Cabeçalho de impressão */
+  .print-header {
+    display: block !important;
+    margin-bottom: 12pt;
+    border-bottom: 2pt solid #0A2E64;
+    padding-bottom: 6pt;
+  }
+
+  .print-header h1 {
+    font-size: 14pt;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #0A2E64;
+    margin: 0 0 2pt 0;
+  }
+
+  .print-header p {
+    font-size: 8pt;
+    color: #555;
+    margin: 0;
+  }
+
+  /* Garantir que o wrapper principal expanda */
+  main,
+  [class*="min-h"],
+  [class*="flex-col"] {
+    min-height: unset !important;
+  }
+
+  /* Tabela */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+    page-break-inside: auto;
+  }
+
+  th {
+    background-color: #0A2E64 !important;
+    color: #fff !important;
+    padding: 5pt 6pt !important;
+    font-size: 8pt !important;
+    font-weight: 700 !important;
+    text-align: left;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  td {
+    padding: 4pt 6pt !important;
+    border-bottom: 0.5pt solid #ddd !important;
+    vertical-align: middle;
+  }
+
+  tr:nth-child(even) td {
+    background-color: #f5f7fa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ocultar inputs, mostrar texto */
+  td input,
+  td select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    font-size: 9pt !important;
+    font-weight: 600;
+    color: #000 !important;
+    width: 100% !important;
+  }
+
+  /* Paginação: ocultar */
+  [class*="pagination"],
+  [class*="Pagination"] {
+    display: none !important;
+  }
+
+  /* Quebra de página elegante */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Garantir impressão A4 */
+  @page {
+    size: A4 landscape;
+    margin: 12mm 10mm;
+  }
+}
+
+/* Cabeçalho de impressão: oculto no browser, visível na impressão */
+.print-header {
+  display: none;
+}
+

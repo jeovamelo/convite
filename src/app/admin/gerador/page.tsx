@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus } from "lucide-react";
+import { Upload, Download, Loader2, Image as ImageIcon, Settings2, QrCode, Type, CheckCircle, Eye, Save, XCircle, Search, Check, Plus, Printer, ChevronDown, FileSpreadsheet, FileText } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { QRCodeSVG } from "qrcode.react";
 import JSZip from "jszip";
@@ -70,41 +70,8 @@ export default function GeradorPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const handleSaveAllTickets = async () => {
-    setIsBatchSaving(true);
-    setToastMessage(null);
-    try {
-      const promises = tickets.map(t => {
-        const draft = drafts[t.id];
-        const guest_name = draft ? draft.guest_name : t.guest_name;
-        const whatsapp = draft ? draft.whatsapp : t.whatsapp;
-        const is_sent = Boolean(t.is_sent || t.sent_status === 'SENT' || t.sent_status === 'ENVIADO');
-
-        return fetch("/api/tickets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: t.id,
-            guest_name: guest_name || "",
-            whatsapp: whatsapp || "",
-            is_sent,
-            sent_status: is_sent ? "SENT" : "PENDING"
-          })
-        });
-      });
-
-      await Promise.all(promises);
-      setToastMessage("Lista de exibíveis salva com sucesso!");
-      setTimeout(() => setToastMessage(null), 4000);
-    } catch (e) {
-      console.error("Erro ao salvar lista em lote", e);
-      setToastMessage("Erro ao salvar alguns itens da lista.");
-      setTimeout(() => setToastMessage(null), 4000);
-    } finally {
-      setIsBatchSaving(false);
-    }
-  };
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Inline editing: cada linha é editável direto na tabela, com auto-save
   // (debounce) e salvamento imediato ao sair do campo (blur).
@@ -113,6 +80,67 @@ export default function GeradorPage() {
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const handleSaveAllTickets = async () => {
+    setIsBatchSaving(true);
+    setToastMessage(null);
+
+    // Reset all row statuses to 'saving'
+    const savingMap: Record<string, 'saving'> = {};
+    tickets.forEach(t => { savingMap[t.id] = 'saving'; });
+    setRowStatus(savingMap);
+
+    let errorCount = 0;
+
+    // Save guest_name + whatsapp for each ticket (one-by-one to track status per row)
+    await Promise.all(
+      tickets.map(async t => {
+        const draft = draftsRef.current[t.id];
+        const guest_name = draft ? draft.guest_name : t.guest_name;
+        const whatsapp = draft ? draft.whatsapp : t.whatsapp;
+        try {
+          const res = await fetch("/api/tickets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: t.id, guest_name: guest_name || "", whatsapp: whatsapp || "" })
+          });
+          if (!res.ok) throw new Error(await res.text());
+          setRowStatus(prev => ({ ...prev, [t.id]: "saved" }));
+        } catch {
+          errorCount++;
+          setRowStatus(prev => ({ ...prev, [t.id]: "error" }));
+        }
+      })
+    );
+
+    // Save sent status separately (best-effort, silently)
+    await Promise.allSettled(
+      tickets.map(t =>
+        fetch("/api/tickets/sent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticket_id: t.id, is_sent: Boolean(t.is_sent) })
+        })
+      )
+    );
+
+    // Auto-clear 'saved' statuses after 3s
+    setTimeout(() => {
+      setRowStatus(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(k => { if (next[k] === 'saved') delete next[k]; });
+        return next;
+      });
+    }, 3000);
+
+    if (errorCount === 0) {
+      setToastMessage("✓ Lista de exibíveis salva com sucesso!");
+    } else {
+      setToastMessage(`${errorCount} erro(s) ao salvar. Verifique as linhas marcadas.`);
+    }
+    setTimeout(() => setToastMessage(null), 5000);
+    setIsBatchSaving(false);
+  };
 
   const filteredTickets = tickets.filter(t => {
     const query = searchQuery.toLowerCase();
@@ -128,48 +156,120 @@ export default function GeradorPage() {
 
   const handleToggleSent = async (id: string, currentIsSent: boolean) => {
     const nextState = !currentIsSent;
-    // Optimistic state update
+    // Optimistic state update — applied immediately, no rollback
     setTickets(prev =>
-      prev.map(t =>
-        t.id === id
-          ? { ...t, is_sent: nextState, sent_status: nextState ? "SENT" : "PENDING" }
-          : t
-      )
+      prev.map(t => t.id === id ? { ...t, is_sent: nextState } : t)
     );
     setRowStatus(prev => ({ ...prev, [id]: "saving" }));
 
     try {
-      const res = await fetch("/api/tickets", {
+      const res = await fetch("/api/tickets/sent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          is_sent: nextState,
-          sent_status: nextState ? "SENT" : "PENDING"
-        })
+        body: JSON.stringify({ ticket_id: id, is_sent: nextState })
       });
-      if (!res.ok) throw new Error("Erro ao alterar status de envio");
-
-      setRowStatus(prev => ({ ...prev, [id]: "saved" }));
-      setTimeout(() => {
-        setRowStatus(prev => (prev[id] === "saved" ? { ...prev, [id]: undefined } : prev));
-      }, 2500);
+      // Accept 200 or any 2xx; also treat "table not found" (500) as best-effort
+      if (res.ok) {
+        setRowStatus(prev => ({ ...prev, [id]: "saved" }));
+        setTimeout(() => {
+          setRowStatus(prev => (prev[id] === "saved" ? { ...prev, [id]: undefined } : prev));
+        }, 2000);
+      } else {
+        // Best-effort: keep the toggled state but clear the saving indicator silently
+        console.warn("[handleToggleSent] API unavailable, state kept locally:", await res.text().catch(() => ''));
+        setRowStatus(prev => ({ ...prev, [id]: undefined }));
+      }
     } catch (e) {
-      console.error("Erro ao alterar status de envio", e);
-      // Revert optimistic update
-      setTickets(prev =>
-        prev.map(t =>
-          t.id === id
-            ? { ...t, is_sent: currentIsSent, sent_status: currentIsSent ? "SENT" : "PENDING" }
-            : t
-        )
-      );
-      setRowStatus(prev => ({ ...prev, [id]: "error" }));
+      // Network error: same best-effort approach
+      console.warn("[handleToggleSent] Network error, state kept locally:", e);
+      setRowStatus(prev => ({ ...prev, [id]: undefined }));
     }
   };
   
   const totalPages = Math.max(1, Math.ceil(filteredTickets.length / itemsPerPage));
   const paginatedTickets = filteredTickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // ── Export helpers ──────────────────────────────────────────────────────
+  const exportToCSV = () => {
+    const header = ["ID Exibível", "Nome do Convidado", "WhatsApp", "Pessoas", "Status Uso", "Enviado"];
+    const rows = tickets.map(t => [
+      t.public_id || "",
+      t.guest_name || "",
+      t.whatsapp || "",
+      t.people_per_invite ?? 1,
+      t.is_used ? "Utilizado" : "Disponível",
+      Boolean(t.is_sent) ? "Enviado" : "Pendente"
+    ]);
+    const csvContent = [header, ...rows]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")
+      ).join("\n");
+    // BOM for Excel UTF-8 detection
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `exibiveis-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportMenuOpen(false);
+  };
+
+  const exportToPDF = async () => {
+    setExportMenuOpen(false);
+    try {
+      // Dynamically load jsPDF from CDN
+      if (!(window as any).jspdf) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('jsPDF failed to load'));
+          document.head.appendChild(s);
+        });
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('autotable failed to load'));
+          document.head.appendChild(s);
+        });
+      }
+      const { jsPDF } = (window as any).jspdf;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('LISTA DE EXIBÍVEIS — Aniversário do Luiz Maurício', 14, 16);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}  |  Total: ${tickets.length} exibíveis`, 14, 23);
+      (doc as any).autoTable({
+        startY: 28,
+        head: [["ID Exibível", "Nome do Convidado", "WhatsApp", "Pessoas", "Status Uso", "Enviado"]],
+        body: tickets.map(t => [
+          t.public_id || "",
+          t.guest_name || "",
+          t.whatsapp || "",
+          t.people_per_invite ?? 1,
+          t.is_used ? "Utilizado" : "Disponível",
+          Boolean(t.is_sent) ? "✓ Enviado" : "Pendente"
+        ]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [10, 46, 100], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: {
+          0: { cellWidth: 28 },
+          3: { halign: 'center', cellWidth: 18 },
+          4: { halign: 'center', cellWidth: 26 },
+          5: { halign: 'center', cellWidth: 24 }
+        }
+      });
+      doc.save(`exibiveis-${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch (e: any) {
+      alert('Erro ao gerar PDF: ' + e.message);
+    }
+  };
+
+  const handlePrint = () => { window.print(); };
 
   // Reset page to 1 when search or limit changes
   useEffect(() => {
@@ -191,6 +291,24 @@ export default function GeradorPage() {
         res = await fetch("/api/tickets");
         data = await res.json();
         list = data.tickets || [];
+      }
+
+      // Merge sent status from separate table
+      try {
+        const sentRes = await fetch("/api/tickets/sent");
+        if (sentRes.ok) {
+          const sentData = await sentRes.json();
+          const sentMap: Record<string, boolean> = {};
+          (sentData.data || []).forEach((s: any) => {
+            sentMap[s.ticket_id] = Boolean(s.is_sent);
+          });
+          list = list.map((t: any) => ({
+            ...t,
+            is_sent: sentMap[t.id] ?? Boolean(t.is_sent),
+          }));
+        }
+      } catch {
+        // sent status table may not exist yet — ignore
       }
 
       setTickets(list);
@@ -340,32 +458,58 @@ export default function GeradorPage() {
   }, [selectedLayoutId]);
 
 
-  // Auto-save debounce
+  // Close export menu on outside click
   useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Auto-save debounce — only when a layout is actually selected
+  useEffect(() => {
+    if (!selectedLayoutId) return;
     const timer = setTimeout(() => {
       handleSaveConfig(true);
     }, 800);
     return () => clearTimeout(timer);
-  }, [qrConfig, idConfig, quantity, peoplePerInvite]);
+  }, [qrConfig, idConfig, quantity, peoplePerInvite, selectedLayoutId]);
 
   const handleSaveConfig = async (isAuto = false) => {
     if (!isAuto) setIsSaving(true);
+
+    // Guard: don't attempt save without a valid layout
+    if (!selectedLayoutId) {
+      if (!isAuto) setError("Selecione um layout antes de salvar.");
+      if (!isAuto) setIsSaving(false);
+      return;
+    }
+
     try {
+      const layoutName = layouts.find(l => l.id === selectedLayoutId)?.name;
+      const payload: Record<string, any> = {
+        id: selectedLayoutId,
+        qr_x: Math.round(qrConfig.x), qr_y: Math.round(qrConfig.y), qr_size: Math.round(qrConfig.size),
+        id_x: Math.round(idConfig.x), id_y: Math.round(idConfig.y), id_width: Math.round(idConfig.width), id_height: Math.round(idConfig.height),
+        id_color: idConfig.color, id_fontSize: Math.round(idConfig.fontSize), id_fontWeight: idConfig.fontWeight,
+        quantity: Math.round(quantity), peoplePerInvite: Math.round(peoplePerInvite)
+      };
+      if (layoutName) payload.name = layoutName;
+
       const settingsRes = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: selectedLayoutId,
-          name: layouts.find(l => l.id === selectedLayoutId)?.name || "Padrão",
-          qr_x: Math.round(qrConfig.x), qr_y: Math.round(qrConfig.y), qr_size: Math.round(qrConfig.size),
-          id_x: Math.round(idConfig.x), id_y: Math.round(idConfig.y), id_width: Math.round(idConfig.width), id_height: Math.round(idConfig.height),
-          id_color: idConfig.color, id_fontSize: Math.round(idConfig.fontSize), id_fontWeight: idConfig.fontWeight,
-          quantity: Math.round(quantity), peoplePerInvite: Math.round(peoplePerInvite)
-        })
+        body: JSON.stringify(payload)
       });
       if (!settingsRes.ok) {
         const errData = await settingsRes.json().catch(() => null);
-        throw new Error(errData?.error || "Falha ao salvar configurações.");
+        const msg = errData?.error || "Falha ao salvar configurações.";
+        // On auto-save, only log to console — never show the error banner
+        if (isAuto) { console.warn('[auto-save]', msg); return; }
+        throw new Error(msg);
       }
 
       // Upload image if newly selected
@@ -386,8 +530,11 @@ export default function GeradorPage() {
       setSaveStatus(isAuto ? "Salvo" : "✓ CONFIGURAÇÃO SALVA");
       if (!isAuto) setTimeout(() => setSaveStatus(null), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao salvar.");
-      console.error(e);
+      // Only propagate to the error banner on manual saves
+      if (!isAuto) {
+        setError(e instanceof Error ? e.message : "Falha ao salvar.");
+      }
+      console.error('[handleSaveConfig]', e);
     }
     if (!isAuto) setIsSaving(false);
   };
@@ -930,12 +1077,54 @@ export default function GeradorPage() {
                     <Search className="absolute left-3.5 top-3.5 text-gray-400" size={18} />
                   </div>
 
+                  {/* ── EXPORT Dropdown ── */}
+                  <div className="relative shrink-0 no-print" ref={exportMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setExportMenuOpen(p => !p)}
+                      className="flex items-center gap-2 bg-sonicBlueNavy hover:bg-sonicBlueMain text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm"
+                    >
+                      <Download size={18} />
+                      <span>EXPORTAR</span>
+                      <ChevronDown size={14} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {exportMenuOpen && (
+                      <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[230px]">
+                        <button
+                          onClick={exportToCSV}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <FileSpreadsheet size={18} className="text-green-600" />
+                          Exportar para Excel (.csv)
+                        </button>
+                        <button
+                          onClick={exportToPDF}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                        >
+                          <FileText size={18} className="text-red-500" />
+                          Exportar para PDF (.pdf)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── PRINT Button ── */}
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 bg-gray-700 hover:bg-gray-800 text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 no-print"
+                    title="Imprimir lista de exibíveis"
+                  >
+                    <Printer size={18} />
+                    <span>IMPRIMIR</span>
+                  </button>
+
                   {/* SALVAR LISTA Button */}
                   <button
                     type="button"
                     onClick={handleSaveAllTickets}
                     disabled={isBatchSaving || loadingTickets}
-                    className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 disabled:opacity-50 cursor-pointer"
+                    className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-5 py-2.5 rounded-xl shadow-md transition-all text-sm shrink-0 disabled:opacity-50 cursor-pointer no-print"
                     title="Salvar todas as alterações da lista de exibíveis"
                   >
                     {isBatchSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
@@ -943,6 +1132,12 @@ export default function GeradorPage() {
                   </button>
                 </div>
               </div>
+
+          {/* Print-only header */}
+          <div className="print-header">
+            <h1>Lista de Exibíveis — Aniversário do Luiz Maurício</h1>
+            <p>Gerado em: {new Date().toLocaleString('pt-BR')} &nbsp;|&nbsp; Total: {tickets.length} exibíveis</p>
+          </div>
 
           {loadingTickets ? (
             <div className="flex-1 flex items-center justify-center py-20">
@@ -1170,6 +1365,8 @@ export default function GeradorPage() {
             </div>
           </div>
         </div>
+      )}
+
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white font-bold px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-500/40 animate-pulse">
