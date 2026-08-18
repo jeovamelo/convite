@@ -462,11 +462,13 @@ export default function GeradorPage() {
           const sentData = await sentRes.json();
           const sentMap: Record<string, boolean> = {};
           (sentData.data || []).forEach((s: any) => {
-            sentMap[s.ticket_id] = Boolean(s.is_sent);
+            if (s.ticket_id) sentMap[s.ticket_id] = Boolean(s.is_sent);
+            if (s.id) sentMap[s.id] = Boolean(s.is_sent);
+            if (s.public_id) sentMap[s.public_id] = Boolean(s.is_sent);
           });
           list = list.map((t: any) => ({
             ...t,
-            is_sent: sentMap[t.id] ?? Boolean(t.is_sent),
+            is_sent: sentMap[t.id] ?? sentMap[t.public_id] ?? Boolean(t.is_sent),
           }));
         }
       } catch {

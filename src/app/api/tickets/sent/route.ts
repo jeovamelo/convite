@@ -14,51 +14,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing ticket_id" }, { status: 400 });
     }
 
-    const sentAt = is_sent ? new Date().toISOString() : null;
     const isSentBool = Boolean(is_sent);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ticket_id));
+    const filterCol = isUuid ? "id" : "public_id";
 
-    // 1. Direct update on public.tickets table by public_id or id
-    try {
-      const byPublicId = await supabaseAdmin
-        .from("tickets")
-        .update({
-          is_sent: isSentBool,
-          sent_at: sentAt
-        })
-        .eq("public_id", ticket_id);
+    // Direct update on public.tickets table
+    const { data, error } = await supabaseAdmin
+      .from("tickets")
+      .update({
+        is_sent: isSentBool
+      })
+      .eq(filterCol, ticket_id)
+      .select("*")
+      .maybeSingle();
 
-      if (byPublicId.error) {
-        await supabaseAdmin
-          .from("tickets")
-          .update({
-            is_sent: isSentBool,
-            sent_at: sentAt
-          })
-          .eq("id", ticket_id);
-      }
-    } catch (err) {
-      console.warn("[tickets/sent] Direct update on tickets table warning:", err);
+    if (error) {
+      console.error("[POST /api/tickets/sent] Update error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 2. Also upsert into ticket_sent_status table (secondary fallback)
-    try {
-      await supabaseAdmin
-        .from("ticket_sent_status")
-        .upsert(
-          {
-            ticket_id,
-            is_sent: isSentBool,
-            sent_at: sentAt,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "ticket_id" }
-        );
-    } catch (err) {
-      console.warn("[tickets/sent] Secondary table ticket_sent_status upsert warning:", err);
-    }
-
-    return NextResponse.json({ success: true, is_sent: isSentBool, sent_at: sentAt });
+    return NextResponse.json({ success: true, is_sent: isSentBool, ticket: data });
   } catch (error: any) {
+    console.error("[POST /api/tickets/sent] Exception:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -69,22 +46,29 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const ticket_id = searchParams.get("ticket_id");
 
-    // Try tickets table
-    let query = supabaseAdmin.from("tickets").select("id, public_id, is_sent, sent_at");
-    if (ticket_id) query = query.or(`id.eq.${ticket_id},public_id.eq.${ticket_id}`);
+    let query = supabaseAdmin.from("tickets").select("*");
 
-    const { data, error } = await query;
-    if (!error && data) {
-      return NextResponse.json({ data });
+    if (ticket_id) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ticket_id));
+      query = isUuid ? query.eq("id", ticket_id) : query.eq("public_id", ticket_id);
     }
 
-    // Fallback: try ticket_sent_status
-    let fallbackQuery = supabaseAdmin.from("ticket_sent_status").select("*");
-    if (ticket_id) fallbackQuery = fallbackQuery.eq("ticket_id", ticket_id);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[GET /api/tickets/sent] Query error:", error);
+      return NextResponse.json({ data: [] });
+    }
 
-    const { data: fallbackData } = await fallbackQuery;
-    return NextResponse.json({ data: fallbackData || [] });
+    const mapped = (data || []).map((t: any) => ({
+      id: t.id,
+      public_id: t.public_id,
+      ticket_id: t.id,
+      is_sent: Boolean(t.is_sent || t.sent_status === "ENVIADO" || t.sent_status === "SENT")
+    }));
+
+    return NextResponse.json({ data: mapped });
   } catch (error: any) {
+    console.error("[GET /api/tickets/sent] Exception:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

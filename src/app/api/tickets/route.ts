@@ -5,54 +5,28 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // Priority 1: Try selecting with is_sent and sent_at directly from tickets table
-    const { data: primaryData, error: primaryError } = await supabaseAdmin
+    // Select all existing columns dynamically so no column mismatch occurs
+    const { data: tickets, error } = await supabaseAdmin
       .from('tickets')
-      .select('id, public_id, guest_name, whatsapp, quantidade_pessoas, status, token_hash, is_sent, sent_at')
+      .select('*')
       .order('public_id', { ascending: true });
 
-    if (!primaryError && primaryData) {
-      return NextResponse.json({ tickets: primaryData });
+    if (error) {
+      console.error("[GET /api/tickets] Supabase query error:", error);
+      throw error;
     }
 
-    // Priority 2: Fallback if is_sent column does not exist on tickets table yet
-    const { data: fallbackTickets, error: fallbackError } = await supabaseAdmin
-      .from('tickets')
-      .select('id, public_id, guest_name, whatsapp, quantidade_pessoas, status, token_hash')
-      .order('public_id', { ascending: true });
-
-    if (fallbackError) throw fallbackError;
-
-    let tickets = fallbackTickets || [];
-
-    // Check if ticket_sent_status table exists and merge
-    try {
-      const { data: sentData } = await supabaseAdmin.from('ticket_sent_status').select('ticket_id, is_sent, sent_at');
-      if (sentData && sentData.length > 0) {
-        const sentMap = new Map(sentData.map((s: any) => [s.ticket_id, s]));
-        tickets = tickets.map((t: any) => {
-          const sentInfo: any = sentMap.get(t.id) || sentMap.get(t.public_id);
-          return {
-            ...t,
-            is_sent: sentInfo ? Boolean(sentInfo.is_sent) : false,
-            sent_at: sentInfo ? sentInfo.sent_at : null
-          };
-        });
-      }
-    } catch {}
-
-    return NextResponse.json({ tickets });
+    return NextResponse.json({ tickets: tickets || [] });
   } catch (error: any) {
+    console.error("[GET /api/tickets] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 /**
  * POST /api/tickets
- * Atualiza APENAS os campos editáveis de um ticket existente.
- * Nunca deleta, nunca re-cria. O public_id (LM-XXXX) é imutável.
- *
- * Body: { id: uuid, guest_name?: string, whatsapp?: string, is_sent?: boolean }
+ * Atualiza os campos editáveis de um ticket existente.
+ * Body: { id: string, guest_name?: string, whatsapp?: string, is_sent?: boolean }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -63,52 +37,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing ticket ID' }, { status: 400 });
     }
 
-    const payload: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    };
+    const payload: Record<string, any> = {};
     if (guest_name !== undefined) payload.guest_name = guest_name || null;
     if (whatsapp !== undefined) payload.whatsapp = whatsapp || null;
     if (is_sent !== undefined) {
       payload.is_sent = Boolean(is_sent);
-      payload.sent_at = is_sent ? new Date().toISOString() : null;
     }
 
-    // Try update by id or public_id
+    // Detect if ID is UUID or public_id (e.g. LM-0001) to prevent UUID syntax error in PostgreSQL
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id));
+    const filterCol = isUuid ? 'id' : 'public_id';
+
     let { data, error } = await supabaseAdmin
       .from('tickets')
       .update(payload)
-      .eq('id', id)
-      .select()
+      .eq(filterCol, id)
+      .select('*')
       .maybeSingle();
 
-    if (!data) {
-      const byPublicId = await supabaseAdmin
-        .from('tickets')
-        .update(payload)
-        .eq('public_id', id)
-        .select()
-        .maybeSingle();
-      data = byPublicId.data;
-      error = byPublicId.error;
-    }
-
     if (error) {
-      // Retry without updated_at or is_sent if column missing
-      delete payload.updated_at;
+      console.error("[POST /api/tickets] Update error:", error);
+      // Fallback: se falhar por causa da coluna is_sent, tenta salvar apenas nome e whatsapp
       delete payload.is_sent;
-      delete payload.sent_at;
       const retry = await supabaseAdmin
         .from('tickets')
         .update(payload)
-        .eq('id', id)
-        .select('id, public_id, guest_name, whatsapp, status, quantidade_pessoas, token_hash')
-        .single();
-      if (retry.error) throw retry.error;
-      return NextResponse.json({ success: true, ticket: retry.data });
+        .eq(filterCol, id)
+        .select('*')
+        .maybeSingle();
+
+      if (retry.error) {
+        console.error("[POST /api/tickets] Retry error:", retry.error);
+        return NextResponse.json({ error: retry.error.message }, { status: 500 });
+      }
+      data = retry.data;
     }
 
     return NextResponse.json({ success: true, ticket: data });
   } catch (error: any) {
+    console.error("[POST /api/tickets] Exception:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
